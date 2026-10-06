@@ -31,6 +31,9 @@ class HubMixn(object):
             if payload is None and namespace == Namespace.HUB_SENSOR_SMOKE:
                 payload = data.get('smoke')
                 target_data_key = 'smoke' if payload is not None else target_data_key
+            elif payload is None and namespace == Namespace.HUB_SENSOR_DOORWINDOW:
+                payload = data.get('door')
+                target_data_key = 'door' if payload is not None else target_data_key
 
             if payload is None:
                 _LOGGER.error(f"{self.__class__.__name__} could not find {target_data_key} attribute in push notification data: "
@@ -49,7 +52,7 @@ class HubMixn(object):
                         _LOGGER.warning(
                             f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
                             f"registered with this hub. The update will be skipped.")
-                        return False
+                        continue
                     else:
                         await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
                 locally_handled = True
@@ -92,7 +95,7 @@ class HubMs100Mixin(object):
             dev_id = d.get('id')
             target_device = self.get_subdevice(subdevice_id=dev_id)
             if target_device is None:
-                _LOGGER.warning(f"Received data for subdevice {target_device}, which has not been registered with this"
+                _LOGGER.warning(f"Received data for subdevice {dev_id}, which has not been registered with this "
                                 f"hub yet. This update will be ignored.")
             else:
                 await target_device.async_handle_subdevice_notification(namespace=Namespace.HUB_SENSOR_ALL, data=d)
@@ -133,6 +136,9 @@ class HubMs100Mixin(object):
             if payload is None and namespace == Namespace.HUB_SENSOR_SMOKE:
                 payload = data.get('smoke')
                 target_data_key = 'smoke' if payload is not None else target_data_key
+            elif payload is None and namespace == Namespace.HUB_SENSOR_DOORWINDOW:
+                payload = data.get('door')
+                target_data_key = 'door' if payload is not None else target_data_key
 
             if payload is None:
                 _LOGGER.error(
@@ -152,7 +158,7 @@ class HubMs100Mixin(object):
                         _LOGGER.warning(
                             f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
                             f"registered with this hub. The update will be skipped.")
-                        return False
+                        continue
                     else:
                         await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
                 locally_handled = True

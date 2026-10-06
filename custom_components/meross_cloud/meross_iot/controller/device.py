@@ -398,7 +398,21 @@ class HubDevice(BaseDevice):
         return self._sub_devices.values()
 
     def get_subdevice(self, subdevice_id: str) -> Optional[GenericSubDevice]:
-        return self._sub_devices.get(subdevice_id)
+        if subdevice_id is None:
+            if len(self._sub_devices) == 1:
+                return next(iter(self._sub_devices.values()))
+            return None
+        subdev = self._sub_devices.get(subdevice_id)
+        if subdev is not None:
+            return subdev
+        subdev = self._sub_devices.get(str(subdevice_id))
+        if subdev is not None:
+            return subdev
+        target = str(subdevice_id).strip().lower()
+        for k, v in self._sub_devices.items():
+            if str(k).strip().lower() == target or str(getattr(v, 'subdevice_id', '')).strip().lower() == target:
+                return v
+        return None
 
     def register_subdevice(self, subdevice: GenericSubDevice) -> None:
         # If the device is already registed, skip it
@@ -428,6 +442,7 @@ class GenericSubDevice(BaseDevice):
         self._temperature = None
         self._battery_info: Optional[BatteryInfo] = None
         self._hub = hub
+        self._online = OnlineStatus.ONLINE
 
     @property
     def battery_info(self) -> Optional[BatteryInfo]:
@@ -480,7 +495,7 @@ class GenericSubDevice(BaseDevice):
         battery_item = None
         if isinstance(battery_list, list):
             for item in battery_list:
-                if isinstance(item, dict) and item.get('id') == self.subdevice_id:
+                if isinstance(item, dict) and str(item.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
                     battery_item = item
                     break
             if battery_item is None and len(battery_list) > 0 and isinstance(battery_list[0], dict):
@@ -507,6 +522,8 @@ class GenericSubDevice(BaseDevice):
         return self._battery_info
 
     async def async_handle_subdevice_notification(self, namespace: Namespace, data: dict) -> bool:
+        self._online = OnlineStatus.ONLINE
+        handled = False
         if namespace == Namespace.HUB_BATTERY:
             raw_val = (
                 data.get('value')
@@ -518,7 +535,7 @@ class GenericSubDevice(BaseDevice):
             if raw_val is not None:
                 try:
                     self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
-                    return True
+                    handled = True
                 except (ValueError, TypeError):
                     pass
         elif namespace == Namespace.HUB_SENSOR_ALL:
@@ -532,12 +549,17 @@ class GenericSubDevice(BaseDevice):
                 if raw_val is not None:
                     try:
                         self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
-                        return True
+                        handled = True
                     except (ValueError, TypeError):
                         pass
 
-        _LOGGER.debug("Unhandled/unprocessed event %s for subdevice %s", namespace, self.subdevice_id)
-        return False
+        # CRITICAL: Always notify registered push notification coroutines (Home Assistant entities)
+        # when a subdevice event is received via the hub!
+        await self._fire_push_notification_event(
+            namespace=namespace, data=data, device_internal_id=self.internal_id
+        )
+
+        return handled
 
     @property
     def internal_id(self) -> str:
@@ -553,7 +575,11 @@ class GenericSubDevice(BaseDevice):
         if self._hub.online_status != OnlineStatus.ONLINE:
             return self._hub.online_status
 
-        return self._online
+        # If subdevice is explicitly marked offline, return offline
+        if self._online == OnlineStatus.OFFLINE:
+            return OnlineStatus.OFFLINE
+
+        return OnlineStatus.ONLINE
 
     def _prepare_push_notification_data(self, data: dict, filter_accessor: str = None) -> Optional[Dict]:
         if filter_accessor is not None:

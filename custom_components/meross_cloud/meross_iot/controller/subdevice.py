@@ -631,9 +631,13 @@ class Ms200Sensor(GenericSubDevice):
                 return None
         return None
 
-    def _handle_door_window_data(self, status: Optional[int], timestamp: Optional[int] = None):
+    def _handle_door_window_data(self, status: Optional[Union[int, bool, str]], timestamp: Optional[int] = None):
         if status is not None:
-            self._is_open = (status == 1)
+            if isinstance(status, dict):
+                status = status.get('status', status.get('state', status.get('open')))
+            str_val = str(status).strip().lower()
+            self._is_open = (status == 1 or status is True or str_val in ('1', 'open', 'true', 'opened'))
+            self._online = OnlineStatus.ONLINE
         if timestamp is not None:
             self._last_sample_time = timestamp
 
@@ -646,12 +650,18 @@ class Ms200Sensor(GenericSubDevice):
             timeout=timeout
         )
         subdevices_states = result.get('all', [])
+        found = False
         for subdev_state in subdevices_states:
-            if subdev_state.get('id') == self.subdevice_id:
+            if str(subdev_state.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
                 await self.async_handle_subdevice_notification(
                     namespace=Namespace.HUB_SENSOR_ALL, data=subdev_state
                 )
+                found = True
                 break
+        if not found and len(subdevices_states) == 1:
+            await self.async_handle_subdevice_notification(
+                namespace=Namespace.HUB_SENSOR_ALL, data=subdevices_states[0]
+            )
 
     async def async_handle_push_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
@@ -664,7 +674,7 @@ class Ms200Sensor(GenericSubDevice):
             bat_data = data.get('battery', {})
             if isinstance(bat_data, list):
                 for b in bat_data:
-                    if isinstance(b, dict) and b.get('id') == self.subdevice_id:
+                    if isinstance(b, dict) and str(b.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
                         bat_data = b
                         break
                 if isinstance(bat_data, list) and len(bat_data) > 0:
@@ -674,22 +684,46 @@ class Ms200Sensor(GenericSubDevice):
                 if raw_val is not None:
                     try:
                         self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
+                        self._online = OnlineStatus.ONLINE
                         locally_handled = True
                     except (ValueError, TypeError):
                         pass
         elif namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-            door_window = data.get('doorWindow', {})
+            door_window = data.get('doorWindow') or data.get('door')
+            target_item = None
             if isinstance(door_window, list):
-                door_window = door_window[0] if len(door_window) > 0 else {}
-            status = door_window.get('status')
-            lm_time = door_window.get('lmTime') or door_window.get('latestSampleTime')
-            self._handle_door_window_data(status=status, timestamp=lm_time)
-            locally_handled = True
+                for item in door_window:
+                    if isinstance(item, dict) and str(item.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
+                        target_item = item
+                        break
+                if target_item is None and len(door_window) > 0 and isinstance(door_window[0], dict):
+                    first_id = door_window[0].get('id')
+                    if first_id is None or str(first_id).strip().lower() == str(self.subdevice_id).strip().lower():
+                        target_item = door_window[0]
+            elif isinstance(door_window, dict):
+                dev_id = door_window.get('id')
+                if dev_id is None or str(dev_id).strip().lower() == str(self.subdevice_id).strip().lower():
+                    target_item = door_window
+            elif data.get('status') is not None and str(data.get('id', self.subdevice_id)).strip().lower() == str(self.subdevice_id).strip().lower():
+                target_item = data
 
-        return locally_handled
+            if target_item is not None:
+                sub_door = target_item.get('doorWindow') or target_item.get('door') if isinstance(target_item.get('doorWindow') or target_item.get('door'), dict) else target_item
+                status = sub_door.get('status')
+                if status is None:
+                    status = sub_door.get('state')
+                if status is None:
+                    status = sub_door.get('open')
+                lm_time = sub_door.get('lmTime') or sub_door.get('latestSampleTime') or sub_door.get('sampleTime') or sub_door.get('time')
+                self._handle_door_window_data(status=status, timestamp=lm_time)
+                locally_handled = True
+
+        parent_handled = await super().async_handle_push_notification(namespace=namespace, data=data)
+        return locally_handled or parent_handled
 
     async def async_handle_subdevice_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
+        self._online = OnlineStatus.ONLINE
         if namespace == Namespace.HUB_ONLINE:
             self._online = OnlineStatus(data.get('online', {}).get('status', -1))
             self._last_active_time = data.get('online', {}).get('lastActiveTime')
@@ -709,17 +743,31 @@ class Ms200Sensor(GenericSubDevice):
                 except (ValueError, TypeError):
                     pass
         elif namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-            status = data.get('status')
-            lm_time = data.get('lmTime') or data.get('latestSampleTime')
-            self._handle_door_window_data(status=status, timestamp=lm_time)
-            locally_handled = True
+            sub_door = data.get('doorWindow') or data.get('door')
+            if not isinstance(sub_door, dict) and isinstance(data, dict):
+                sub_door = data
+            if isinstance(sub_door, dict):
+                status = sub_door.get('status')
+                if status is None:
+                    status = sub_door.get('state')
+                if status is None:
+                    status = sub_door.get('open')
+                lm_time = sub_door.get('lmTime') or sub_door.get('latestSampleTime') or sub_door.get('sampleTime') or sub_door.get('time')
+                self._handle_door_window_data(status=status, timestamp=lm_time)
+                locally_handled = True
         elif namespace == Namespace.HUB_SENSOR_ALL:
             self._online = OnlineStatus(data.get('online', {}).get('status', -1))
             self._last_active_time = data.get('online', {}).get('lastActiveTime')
-            door_window = data.get('doorWindow')
-            if door_window is not None:
+            door_window = data.get('doorWindow') or data.get('door')
+            if isinstance(door_window, list) and len(door_window) > 0:
+                door_window = door_window[0]
+            if isinstance(door_window, dict):
                 status = door_window.get('status')
-                lm_time = door_window.get('lmTime') or door_window.get('latestSampleTime')
+                if status is None:
+                    status = door_window.get('state')
+                if status is None:
+                    status = door_window.get('open')
+                lm_time = door_window.get('lmTime') or door_window.get('latestSampleTime') or door_window.get('sampleTime')
                 self._handle_door_window_data(status=status, timestamp=lm_time)
             battery_data = data.get('battery') or data.get('batteryValue')
             if battery_data is not None:
@@ -890,12 +938,18 @@ class Gs559aSensor(GenericSubDevice):
             timeout=timeout
         )
         subdevices_states = result.get('all', [])
+        found = False
         for subdev_state in subdevices_states:
-            if subdev_state.get('id') == self.subdevice_id:
+            if str(subdev_state.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
                 await self.async_handle_subdevice_notification(
                     namespace=Namespace.HUB_SENSOR_ALL, data=subdev_state
                 )
+                found = True
                 break
+        if not found and len(subdevices_states) == 1:
+            await self.async_handle_subdevice_notification(
+                namespace=Namespace.HUB_SENSOR_ALL, data=subdevices_states[0]
+            )
 
     async def async_handle_push_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
@@ -908,7 +962,7 @@ class Gs559aSensor(GenericSubDevice):
             bat_data = data.get('battery', {})
             if isinstance(bat_data, list):
                 for b in bat_data:
-                    if isinstance(b, dict) and b.get('id') == self.subdevice_id:
+                    if isinstance(b, dict) and str(b.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
                         bat_data = b
                         break
                 if isinstance(bat_data, list) and len(bat_data) > 0:
@@ -918,24 +972,44 @@ class Gs559aSensor(GenericSubDevice):
                 if raw_val is not None:
                     try:
                         self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
+                        self._online = OnlineStatus.ONLINE
                         locally_handled = True
                     except (ValueError, TypeError):
                         pass
         elif namespace == Namespace.HUB_SENSOR_SMOKE:
             smoke_data = data.get('smokeAlarm') or data.get('smoke')
+            target_item = None
             if isinstance(smoke_data, list):
-                smoke_data = smoke_data[0] if len(smoke_data) > 0 else {}
-            if isinstance(smoke_data, dict):
-                status = smoke_data.get('status')
-                interconn = smoke_data.get('interConn')
-                lm_time = smoke_data.get('lmTime') or smoke_data.get('latestSampleTime')
+                for item in smoke_data:
+                    if isinstance(item, dict) and str(item.get('id', '')).strip().lower() == str(self.subdevice_id).strip().lower():
+                        target_item = item
+                        break
+                if target_item is None and len(smoke_data) > 0 and isinstance(smoke_data[0], dict):
+                    first_id = smoke_data[0].get('id')
+                    if first_id is None or str(first_id).strip().lower() == str(self.subdevice_id).strip().lower():
+                        target_item = smoke_data[0]
+            elif isinstance(smoke_data, dict):
+                dev_id = smoke_data.get('id')
+                if dev_id is None or str(dev_id).strip().lower() == str(self.subdevice_id).strip().lower():
+                    target_item = smoke_data
+            elif data.get('status') is not None and str(data.get('id', self.subdevice_id)).strip().lower() == str(self.subdevice_id).strip().lower():
+                target_item = data
+
+            if target_item is not None:
+                sub_smoke = target_item.get('smokeAlarm') or target_item.get('smoke') if isinstance(target_item.get('smokeAlarm') or target_item.get('smoke'), dict) else target_item
+                status = sub_smoke.get('status')
+                interconn = sub_smoke.get('interConn')
+                lm_time = sub_smoke.get('lmTime') or sub_smoke.get('latestSampleTime') or sub_smoke.get('sampleTime') or sub_smoke.get('time')
                 self._handle_smoke_data(status=status, interconn=interconn, timestamp=lm_time)
+                self._online = OnlineStatus.ONLINE
                 locally_handled = True
 
-        return locally_handled
+        parent_handled = await super().async_handle_push_notification(namespace=namespace, data=data)
+        return locally_handled or parent_handled
 
     async def async_handle_subdevice_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
+        self._online = OnlineStatus.ONLINE
         if namespace == Namespace.HUB_ONLINE:
             self._online = OnlineStatus(data.get('online', {}).get('status', -1))
             self._last_active_time = data.get('online', {}).get('lastActiveTime')
@@ -955,19 +1029,22 @@ class Gs559aSensor(GenericSubDevice):
                 except (ValueError, TypeError):
                     pass
         elif namespace == Namespace.HUB_SENSOR_SMOKE:
-            status = data.get('status')
-            interconn = data.get('interConn')
-            lm_time = data.get('lmTime') or data.get('latestSampleTime')
+            sub_smoke = data.get('smokeAlarm') or data.get('smoke') if isinstance(data.get('smokeAlarm') or data.get('smoke'), dict) else data
+            status = sub_smoke.get('status')
+            interconn = sub_smoke.get('interConn')
+            lm_time = sub_smoke.get('lmTime') or sub_smoke.get('latestSampleTime') or sub_smoke.get('sampleTime') or sub_smoke.get('time')
             self._handle_smoke_data(status=status, interconn=interconn, timestamp=lm_time)
             locally_handled = True
         elif namespace == Namespace.HUB_SENSOR_ALL:
             self._online = OnlineStatus(data.get('online', {}).get('status', -1))
             self._last_active_time = data.get('online', {}).get('lastActiveTime')
             smoke_data = data.get('smokeAlarm') or data.get('smoke')
-            if smoke_data is not None:
+            if isinstance(smoke_data, list) and len(smoke_data) > 0:
+                smoke_data = smoke_data[0]
+            if isinstance(smoke_data, dict):
                 status = smoke_data.get('status')
                 interconn = smoke_data.get('interConn')
-                lm_time = smoke_data.get('lmTime') or smoke_data.get('latestSampleTime')
+                lm_time = smoke_data.get('lmTime') or smoke_data.get('latestSampleTime') or smoke_data.get('sampleTime') or smoke_data.get('time')
                 self._handle_smoke_data(status=status, interconn=interconn, timestamp=lm_time)
             battery_data = data.get('battery') or data.get('batteryValue')
             if battery_data is not None:

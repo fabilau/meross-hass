@@ -273,13 +273,18 @@ class MerossDevice(Entity):
 
     @property
     def online(self) -> bool:
+        # If the device itself explicitly reports OFFLINE, it is offline
+        if getattr(self._device, 'online_status', None) == OnlineStatus.OFFLINE:
+            return False
         if not self._coordinator.last_update_success:
             return False
         elif self._last_http_state is not None:
             return self._last_http_state.online_status == OnlineStatus.ONLINE
         else:
-            http_dev = self._coordinator.data.get(self._device.uuid)
-            return http_dev is not None and http_dev.online_status == OnlineStatus.ONLINE
+            http_dev = self._coordinator.data.get(self._device.uuid) if self._coordinator.data else None
+            if http_dev is not None:
+                return http_dev.online_status == OnlineStatus.ONLINE
+            return getattr(self._device, 'online_status', None) == OnlineStatus.ONLINE
 
     @property
     def unique_id(self) -> str:

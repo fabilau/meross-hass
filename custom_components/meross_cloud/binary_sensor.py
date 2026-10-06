@@ -39,7 +39,7 @@ class WaterLeakSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if the binary sensor is on."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_leaking
         return None
 
@@ -57,6 +57,21 @@ class Ms200DoorWindowSensor(MerossDevice, BinarySensorEntity):
 
         self._attr_device_class = BinarySensorDeviceClass.DOOR
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._device.is_open is None and self.hass is not None:
+            self.hass.async_create_task(self._async_initial_update())
+
+    async def _async_initial_update(self) -> None:
+        try:
+            await self._device.async_update()
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.debug("Initial update for %s failed: %s", self.entity_id, e)
+
+    async def async_update(self) -> None:
+        await self._device.async_update()
+
     @property
     def should_poll(self) -> bool:
         return False
@@ -64,15 +79,16 @@ class Ms200DoorWindowSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if the door/window is open."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_open
         return None
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {
-            "latest_sample_time": self._device.last_sampled_time,
-        }
+        attrs = {}
+        if self._device.last_sampled_time is not None:
+            attrs["latest_sample_time"] = self._device.last_sampled_time.isoformat()
+        return attrs
 
 
 class Gs559aSmokeAlarmSensor(MerossDevice, BinarySensorEntity):
@@ -89,6 +105,21 @@ class Gs559aSmokeAlarmSensor(MerossDevice, BinarySensorEntity):
 
         self._attr_device_class = BinarySensorDeviceClass.SMOKE
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._device.status is None and self.hass is not None:
+            self.hass.async_create_task(self._async_initial_update())
+
+    async def _async_initial_update(self) -> None:
+        try:
+            await self._device.async_update()
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.debug("Initial update for %s failed: %s", self.entity_id, e)
+
+    async def async_update(self) -> None:
+        await self._device.async_update()
+
     @property
     def should_poll(self) -> bool:
         return False
@@ -96,7 +127,7 @@ class Gs559aSmokeAlarmSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if smoke alarm is sounding."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_smoke_alarm
         return None
 
@@ -122,7 +153,7 @@ class Gs559aHeatAlarmSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if heat alarm is sounding."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_heat_alarm
         return None
 
@@ -148,7 +179,7 @@ class Gs559aAlarmProblemSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if sensor or hardware fault is detected."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_error
         return None
 
@@ -174,7 +205,7 @@ class Gs559aAlarmTestSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if alarm test mode is active."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_test_alarm
         return None
 
@@ -200,7 +231,7 @@ class Gs559aAlarmMutedSensor(MerossDevice, BinarySensorEntity):
     @property
     def is_on(self) -> Optional[bool]:
         """Return true if alarm is currently muted / silenced."""
-        if self._device.online_status == OnlineStatus.ONLINE:
+        if self.online or self._device.online_status != OnlineStatus.OFFLINE:
             return self._device.is_muted
         return None
 

@@ -96,6 +96,113 @@ class TestMs200Entities:
         ms200_device._online = OnlineStatus.OFFLINE
         assert sensor.is_on is None
 
+    @pytest.mark.asyncio
+    async def test_door_window_sensor_push_end_to_end(self, ms200_device, mock_coordinator):
+        """Verify that push notifications delivered to the sensor update its state and trigger HA scheduling."""
+        sensor = Ms200DoorWindowSensor(
+            device=ms200_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        mock_hass = MagicMock()
+        mock_hass.data = {DOMAIN: {"ADDED_ENTITIES_IDS": set()}}
+        sensor.hass = mock_hass
+        sensor.async_schedule_update_ha_state = MagicMock()
+
+        await sensor.async_added_to_hass()
+
+        # Simulate push notification for door OPEN (status = 1)
+        push_open = {
+            "doorWindow": [
+                {
+                    "id": "sub_ms200",
+                    "status": 1,
+                    "lmTime": 1700000100,
+                }
+            ]
+        }
+        await ms200_device.async_handle_push_notification(Namespace.HUB_SENSOR_DOORWINDOW, push_open)
+
+        assert sensor.is_on is True
+        assert ms200_device.is_open is True
+        sensor.async_schedule_update_ha_state.assert_called()
+
+        # Simulate push notification for door CLOSED (status = 0)
+        push_closed = {
+            "doorWindow": [
+                {
+                    "id": "sub_ms200",
+                    "status": 0,
+                    "lmTime": 1700000200,
+                }
+            ]
+        }
+        await ms200_device.async_handle_push_notification(Namespace.HUB_SENSOR_DOORWINDOW, push_closed)
+
+        assert sensor.is_on is False
+        assert ms200_device.is_open is False
+
+    @pytest.mark.asyncio
+    async def test_door_window_sensor_multi_sensor_filtering(self, mock_coordinator):
+        """Verify that in multi-sensor setups, push events for sensor B do not overwrite sensor A."""
+        manager = MagicMock()
+        hub = MagicMock()
+        hub.online_status = OnlineStatus.ONLINE
+        manager.find_devices.return_value = [hub]
+
+        info1 = HttpSubdeviceInfo("sub_1", "ms200", "Sensor 1", "icon")
+        info2 = HttpSubdeviceInfo("sub_2", "ms200", "Sensor 2", "icon")
+        sensor1_dev = build_meross_subdevice(info1, "hub_uuid", {}, manager)
+        sensor2_dev = build_meross_subdevice(info2, "hub_uuid", {}, manager)
+
+        sensor1 = Ms200DoorWindowSensor(sensor1_dev, mock_coordinator, channel=0)
+        sensor2 = Ms200DoorWindowSensor(sensor2_dev, mock_coordinator, channel=0)
+
+        # Event specifically for sensor 2
+        push_payload = {
+            "doorWindow": [
+                {"id": "sub_2", "status": 1, "lmTime": 1700000500}
+            ]
+        }
+        await sensor1_dev.async_handle_push_notification(Namespace.HUB_SENSOR_DOORWINDOW, push_payload)
+        await sensor2_dev.async_handle_push_notification(Namespace.HUB_SENSOR_DOORWINDOW, push_payload)
+
+        # sensor 1 should still be untouched (None)
+        assert sensor1.is_on is None
+        # sensor 2 should be Open (True)
+        assert sensor2.is_on is True
+
+    @pytest.mark.asyncio
+    async def test_door_window_sensor_initial_fetch_on_startup(self, ms200_device, mock_coordinator):
+        """Verify that when added to Home Assistant with is_open is None, an initial fetch is triggered."""
+        sensor = Ms200DoorWindowSensor(
+            device=ms200_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        mock_hass = MagicMock()
+        mock_hass.data = {DOMAIN: {"ADDED_ENTITIES_IDS": set()}}
+        def close_coro(coro):
+            coro.close()
+            return MagicMock()
+        mock_hass.async_create_task.side_effect = close_coro
+        sensor.hass = mock_hass
+
+        assert sensor.is_on is None
+
+        # Simulate hub answering async_update with current door state (closed)
+        ms200_device.hub._execute_command = AsyncMock(return_value={
+            'all': [
+                {'id': 'sub_ms200', 'doorWindow': {'status': 0, 'lmTime': 1700000000}}
+            ]
+        })
+
+        await sensor.async_added_to_hass()
+        mock_hass.async_create_task.assert_called_once()
+
+        await sensor._async_initial_update()
+        assert sensor.is_on is False
+
 
 class TestGs559aEntities:
     def test_smoke_sensor_states(self, gs559a_device, mock_coordinator):
@@ -225,6 +332,46 @@ class TestGs559aEntities:
 
             await mute_button.async_press()
             mock_mute.assert_called_once_with(timeout=5.0)
+
+    @pytest.mark.asyncio
+    async def test_smoke_sensor_push_end_to_end(self, gs559a_device, mock_coordinator):
+        """Verify that smoke alarm push notifications update entity state and trigger HA scheduling."""
+        smoke_sensor = Gs559aSmokeAlarmSensor(
+            device=gs559a_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        mock_hass = MagicMock()
+        mock_hass.data = {DOMAIN: {"ADDED_ENTITIES_IDS": set()}}
+        smoke_sensor.hass = mock_hass
+        smoke_sensor.async_schedule_update_ha_state = MagicMock()
+
+        await smoke_sensor.async_added_to_hass()
+
+        push_alarm = {
+            "smokeAlarm": [
+                {
+                    "id": "sub_gs559a",
+                    "status": 25,
+                    "lmTime": 1700000100,
+                }
+            ]
+        }
+        await gs559a_device.async_handle_push_notification(Namespace.HUB_SENSOR_SMOKE, push_alarm)
+        assert smoke_sensor.is_on is True
+        smoke_sensor.async_schedule_update_ha_state.assert_called()
+
+        push_ok = {
+            "smokeAlarm": [
+                {
+                    "id": "sub_gs559a",
+                    "status": 170,
+                    "lmTime": 1700000200,
+                }
+            ]
+        }
+        await gs559a_device.async_handle_push_notification(Namespace.HUB_SENSOR_SMOKE, push_ok)
+        assert smoke_sensor.is_on is False
 
 
 class TestBatterySensorStability:

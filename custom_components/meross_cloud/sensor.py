@@ -360,7 +360,7 @@ class BatterySensorWrapper(GenericSensorWrapper):
             _LOGGER.debug("Could not refresh battery for %s: %s", self.name, e)
 
     async def _async_push_notification_received(self, namespace: Namespace, data: dict, device_internal_id: str):
-        if namespace == Namespace.HUB_BATTERY:
+        if namespace in (Namespace.HUB_BATTERY, Namespace.HUB_SENSOR_ALL):
             dev_battery = getattr(self._device, 'battery_info', None)
             if dev_battery is not None:
                 self._battery_percentage = dev_battery
@@ -377,8 +377,10 @@ class BatterySensorWrapper(GenericSensorWrapper):
     def extra_state_attributes(self):
         attrs = {}
         bat_info = self._battery_percentage or getattr(self._device, 'battery_info', None)
-        if bat_info is not None and getattr(bat_info, 'sample_ts', None) is not None:
-            attrs['latest_sample_time'] = bat_info.sample_ts.isoformat()
+        if bat_info is not None:
+            ts = getattr(bat_info, 'sampled_datetime', None) or getattr(bat_info, '_sample_ts', None) or getattr(bat_info, 'sample_ts', None)
+            if ts is not None:
+                attrs['latest_sample_time'] = ts.isoformat()
         return attrs
 
     @property
