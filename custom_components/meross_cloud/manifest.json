@@ -1,10 +1,10 @@
 {
   "domain": "meross_cloud",
   "name": "Meross Cloud IoT",
-  "documentation": "https://www.home-assistant.io/components/meross_cloud",
-  "issue_tracker": "https://github.com/albertogeniola/meross-homeassistant",
+  "documentation": "https://github.com/fabilau/meross-hass",
+  "issue_tracker": "https://github.com/fabilau/meross-hass/issues",
   "dependencies": ["persistent_notification"],
-  "codeowners": ["@albertogeniola"],
+  "codeowners": ["@fabilau"],
   "requirements": ["pycryptodomex>=3.20.0", "paho-mqtt>=2.1.0"],
   "config_flow": true,
   "quality_scale": "platinum",
