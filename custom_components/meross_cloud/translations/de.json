@@ -1,0 +1,81 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Es ist nur eine einzige Konfiguration von Meross erlaubt."
+    },
+    "error": {
+      "invalid_credentials": "Ungültige Anmeldedaten.",
+      "connection_error": "Verbindung zu Meross nicht möglich.",
+      "invalid_http_endpoint": "Ungültiger Meross HTTP-API-Endpunkt.",
+      "api_invalid_ssl_code": "Ungültige SSL-Antwort vom Server erhalten. Prüfen Sie, ob der Server HTTPS nutzt.",
+      "unknown_error": "Ein unerwarteter Fehler ist aufgetreten.",
+      "api_connection_refused": "Verbindung zum HTTP(S)-API-Server abgelehnt. Adresse prüfen.",
+      "client_connection_error": "Fehler beim Verbinden mit der HTTP-API.",
+      "missing_credentials": "Bitte fehlende Anmeldedaten angeben.",
+      "mdns_lookup_failed": "Automatische Erkennung fehlgeschlagen. Standardwerte wurden gewählt."
+    },
+    "step": {
+      "user": {
+        "title": "Broker wählen",
+        "data": {}
+      },
+      "configure_manager": {
+        "title": "Bei Meross Cloud anmelden",
+        "data": {
+          "username": "E-Mail-Adresse",
+          "password": "Passwort",
+          "http_api_endpoint": "HTTP-API-Endpunkt",
+          "override_mqtt_endpoint": "MQTT-Adresse (Host:Port)",
+          "skip_mqtt_cert_validation": "MQTT-Zertifikatsüberprüfung überspringen"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Erneute Authentifizierung erforderlich",
+        "description": "Die Meross-Integration muss Ihr Konto erneut authentifizieren."
+      }
+    },
+    "title": "Meross"
+  },
+  "options": {
+    "error": {},
+    "step": {
+      "init": {
+        "data": {
+          "custom_user_agent": "Benutzerdefinierter HTTP-User-Agent-Header für API-Abfragen",
+          "lan_transport_mode": "Geräte-Kommunikationsoptionen"
+        },
+        "title": "Meross Cloud Optionen"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "smoke_alarm_status": {
+        "name": "Rauchmelder-Status",
+        "state": {
+          "ok": "Normal",
+          "alarm_smoke": "Rauchalarm",
+          "alarm_smoke_muted": "Rauchalarm (Stummgeschaltet)",
+          "alarm_temperature_high": "Hitzealarm",
+          "alarm_temperature_high_muted": "Hitzealarm (Stummgeschaltet)",
+          "alarm_test": "Alarmtest",
+          "error_battery": "Batteriefehler",
+          "error_battery_muted": "Batteriefehler (Stummgeschaltet)",
+          "error_smoke": "Rauchsensorfehler",
+          "error_smoke_muted": "Rauchsensorfehler (Stummgeschaltet)",
+          "error_temperature": "Hitzesensorfehler",
+          "error_temperature_muted": "Hitzesensorfehler (Stummgeschaltet)",
+          "unknown": "Unbekannt"
+        }
+      }
+    },
+    "button": {
+      "alarm_test": {
+        "name": "Alarm testen"
+      },
+      "alarm_mute": {
+        "name": "Alarm stummschalten"
+      }
+    }
+  }
+}
