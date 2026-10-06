@@ -1,6 +1,6 @@
 # Meross Custom Component
 
-Based on pure-python library, this custom component enables full control on your meross devices.
+This custom integration enables full control of your Meross devices via the Meross Cloud.
 
 ## Features
 
@@ -10,6 +10,7 @@ Based on pure-python library, this custom component enables full control on your
 - Auto discovery of new meross devices
 - Auto-reconnect in case of connection drop
 - Configurable API rate limits
+- GS559A smoke/heat alarm and MS200 door/window sensor support
 
 ## Requirements
 
@@ -32,8 +33,8 @@ The following table will help you get the right one:
 
 The following animation shows how to do that.
 
-<a href="https://raw.githubusercontent.com/albertogeniola/meross-homeassistant/master/docs/source/images/components/meross_cloud/install-via-webui.gif">
-<img src="https://raw.githubusercontent.com/albertogeniola/meross-homeassistant/master/docs/source/images/components/meross_cloud/install-via-webui.gif" alt="Installation via web-ui" width=400>
+<a href="https://raw.githubusercontent.com/fabilau/meross-hass/main/docs/source/images/components/meross_cloud/install-via-webui.gif">
+<img src="https://raw.githubusercontent.com/fabilau/meross-hass/main/docs/source/images/components/meross_cloud/install-via-webui.gif" alt="Installation via web-ui" width=400>
 </a>
 
 ### API rate limit
@@ -43,10 +44,6 @@ When connecting an more than 5 Meross sensors/devices to HomeAssistant via this 
 the Meross security team might request you to release/decrease the API calling frequency.
 Therefore, you should avoid using high-frequency polling scripts/automations with Meross devices.
 
-## Be nice!
+## Support
 
-If you like the component, why don't you support me by buying me a beer or a coffe?
-It would certainly motivate me to further improve this work. [Sponsor me on GitHub](https://github.com/sponsors/albertogeniola)!
-
-Or, if you prefer, buy me some coffe for further improve this component even more.
-[![Buy me a coffe!](https://www.buymeacoffee.com/assets/img/custom_images/black_img.png)](https://www.buymeacoffee.com/albertogeniola)
+Bugs and feature requests: [GitHub issues](https://github.com/fabilau/meross-hass/issues)

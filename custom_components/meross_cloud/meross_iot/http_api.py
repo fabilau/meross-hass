@@ -578,7 +578,7 @@ def main():
     parser = ArgumentParser(
         prog="meross_api_cli",
         description="Meross HTTP API utility",
-        epilog="Created by Alberto Geniola")
+    )
     subparsers = parser.add_subparsers()
 
     # auth parser

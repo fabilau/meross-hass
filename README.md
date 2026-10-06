@@ -1,162 +1,123 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-![Build](https://img.shields.io/azure-devops/build/albertogeniola/c4128d1b-c23c-418d-95c5-2de061954ee5/3/master?style=for-the-badge)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz/docs/faq/custom_repositories)
+[![GitHub release](https://img.shields.io/github/v/release/fabilau/meross-hass?style=for-the-badge)](https://github.com/fabilau/meross-hass/releases/latest)
 
-# Meross HomeAssistant component
-A full-featured Homeassistant component to drive Meross devices. 
-This component is based on the underlying MerossIot library available [here](https://github.com/albertogeniola/MerossIot).
+# Meross Integration for Home Assistant
+A Home Assistant custom integration to control Meross smart devices via the Meross Cloud (MQTT push + HTTP API).
+The low-level Meross protocol library is bundled with the integration, so no extra Python packages need to be installed.
 
 ## ✨ What's New in v1.4.0
-- **🛡️ 24/7 Stability & Freeze Fixes**: Resolved the notorious daily connection freezes where devices stopped responding and forced users into hourly integration restarts. Added strict 15s connection timeouts, asyncio thread-safety for MQTT disconnects, exponential reconnect backoffs, debounce protection against reconnect storms, future memory leak prevention, and an automatic health-check watchdog.
-- **🚨 Full GS559A Smart Smoke & Heat Alarm Support**:
-  - Binary sensors: Smoke Alarm, Heat Alarm, Sensor Fault/Problem, Test Mode, Muted State
+- **🛡️ 24/7 stability & freeze fixes**: Resolved the daily connection freezes where devices stopped responding and the integration had to be restarted. Added strict 15s connection timeouts, thread-safe MQTT disconnect handling, exponential reconnect backoff, debounce protection against reconnect storms, cleanup of pending futures and an automatic health-check watchdog.
+- **🚨 GS559A smart smoke & heat alarm support**:
+  - Binary sensors: smoke alarm, heat alarm, sensor fault, test mode, muted state
   - Diagnostic status sensor with numeric and descriptive states
-  - Action buttons: Test Alarm Sound and Mute/Silence Alarm
-  - Battery level monitoring
-- **🚪 Full MS200 Door & Window Sensor Support**:
-  - Instant push binary sensor (Open/Closed) with timestamp attributes
-  - Battery level monitoring
-- **🩺 Hardware Diagnostic Tool**: Validate your physical devices and watch real-time MQTT push events with `python3 tools/meross_diagnostic.py`.
+  - Buttons: test alarm sound, mute/silence alarm
+  - Battery level
+- **🚪 MS200 door & window sensor support**:
+  - Instant push binary sensor (open/closed) with timestamp attributes
+  - Battery level
+- **🩺 Hardware diagnostic tool**: Validate your devices and watch live MQTT push events with `python3 tools/meross_diagnostic.py`.
 
-## Installation & configuration
-You can install this component in two ways: via HACS or manually.
-HACS is a nice community-maintained components manager, which allows you to install git-hub hosted components in a few clicks.
-If you have already HACS installed on your HomeAssistant, it's better to go with that.
-On the other hand, if you don't have HACS installed or if you don't plan to install it, then you can use manual installation.
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-### Option A: Installing via HACS
-If you have HACS, well, it's piece of cake! 
-Just search for "Meross" (Full name is Meross Integration) in the default repository of HACS and it'll show up.
-Click on Install. When the installation completes, **you must restart homeassistant** in order to make it work.
-As soon as HomeAssistant is restarted, you can proceed with __component setup__.
+## Supported devices
+Devices are detected by the capabilities they report to the Meross cloud, so most current Meross products work out of the box:
 
-### Option B: Classic installation (custom_component)
-1. Download the latest zip release archive from [here](https://github.com/albertogeniola/meross-homeassistant/releases/latest)
-1. Unzip/copy the meross_cloud directory within the `custom_components` directory of your homeassistant installation.
-The `custom_components` directory resides within your homeassistant configuration directory.
-Usually, the configuration directory is within your home (`~/.homeassistant/`).
-In other words, the configuration directory of homeassistant is where the config.yaml file is located.
-After a correct installation, your configuration directory should look like the following.
+| Device type                          | Home Assistant platforms            |
+|--------------------------------------|-------------------------------------|
+| Smart plugs & power strips (incl. energy metering) | `switch`, `sensor`        |
+| Light bulbs & LED strips             | `light`                             |
+| Garage door openers, roller shutters | `cover`                             |
+| Thermostats & radiator valves        | `climate`                           |
+| Humidifiers & diffusers              | `humidifier`, `light`               |
+| Hub sub-devices: MS100 (temperature/humidity), MS200 (door/window), GS559A (smoke/heat) | `sensor`, `binary_sensor`, `button` |
+
+## Installation
+
+### Option A: HACS (recommended)
+1. In Home Assistant open **HACS → ⋮ → Custom repositories**.
+2. Add `https://github.com/fabilau/meross-hass` with category **Integration**.
+3. Search for **Meross Integration** and click **Download**.
+4. **Restart Home Assistant.**
+
+### Option B: Manual installation
+1. Download the latest release archive from the [releases page](https://github.com/fabilau/meross-hass/releases/latest).
+2. Copy the `custom_components/meross_cloud` directory into the `custom_components` directory of your Home Assistant configuration directory (the one containing `configuration.yaml`). Create `custom_components` if it does not exist:
     ```
-    └── ...
-    └── configuration.yaml
-    └── secrects.yaml
-    └── custom_components
-        └── meross_cloud
-            └── __init__.py
-            └── common.py
-            └── cover.py
+    config/
+    ├── configuration.yaml
+    └── custom_components/
+        └── meross_cloud/
+            ├── __init__.py
+            ├── manifest.json
             └── ...
     ```
+3. **Restart Home Assistant.**
 
-    **Note**: if the custom_components directory does not exist, you need to create it.
+## Configuration
+Go to **Settings → Devices & Services → Add Integration** and search for **Meross Cloud IoT**.
+The setup wizard asks for the following values:
 
-After copy-pasting the meross_cloud directory into the custom_components folder, you need to restart HomeAssistant.
-As soon as HomeAssistant is restarted, you can proceed with __component setup__.
+| Field                            | Example                      | Description |
+|----------------------------------|------------------------------|-------------|
+| HTTP API Endpoint                | `https://iotx-eu.meross.com` | Meross API endpoint for your region: <br/>- `https://iotx-eu.meross.com` (Europe) <br/>- `https://iotx-us.meross.com` (United States) <br/>- `https://iotx-ap.meross.com` (Asia/Pacific) |
+| Email Address                    | `user@example.com`           | The email address of your Meross account (same as in the Meross app). |
+| Password                         | `••••••••`                   | The password of your Meross account. |
+| MQTT Address                     | `mqtt.meross.com:443`        | MQTT broker address (`host:port`). Pre-filled with the broker of your Meross account; only change it for a self-hosted broker. |
+| Skip MQTT certificate validation | unchecked                    | Disables TLS certificate validation of the MQTT broker. Keep unchecked for the official Meross cloud; only enable it for self-hosted brokers with self-signed certificates. |
 
-### Component setup    
-Once the component has been installed, you need to configure it in order to make it work.
-To do so, navigate to "Configuration -> Integrations -> Add Integration" and look for "Meross Cloud IoT".
-As soon as you add it, you'll be asked to configure it. 
-The following table summarizes the fields that the wizard will require you to fill in:
+Your password is only used to obtain a session token; Home Assistant stores the token, not the password. If the token expires or your password changes, Home Assistant will ask you to re-authenticate.
 
-|  Field Name                      | Example Value           | Description                                             | 
-|----------------------------------|-------------------------|---------------------------------------------------------|
-| HTTP Api Endpoint                | One of the following: <br/> - https://iotx-ap.meross.com (for Asia/Pacific regions) <br/> - https://iotx-eu.meross.com (for Europe) <br/> - https://iotx-us.meross.com (for United States) | Is the HTTP(s) API endpoint used by the Meross Manager. This might vary in accordance with your country | 
-| Email Address                    | johndoe@gmail.com       | Your Meross account username/email. If connecting to the official Meross cloud, use the same from the Meross App |
-| Password                         | R4nd0mS3cret            | Your Meross account password. If connecting to the official Meross cloud, use the same from the Meross App |
-| Skip MQTT certificate validation | True (Checked)          | Configures MQTT certificate validation. When unchecked it requires a valid certificate to be exposed from the Meross Server. If checked, it skips the MQTT certificate validation. If connecting to the official Meross cloud, you can uncheck this. When connecting to local-lan or custom MQTT brokers, you might want to check this. |
+<img src="docs/source/images/components/meross_cloud/install-via-webui.gif" alt="Configuration via web UI" width=500>
 
-The following animation shows an example of component configuration
-[![Installation via web UI](https://raw.githubusercontent.com/albertogeniola/meross-homeassistant/master/docs/source/images/components/meross_cloud/install-via-webui.gif)](https://raw.githubusercontent.com/albertogeniola/meross-homeassistant/master/docs/source/images/components/meross_cloud/install-via-webui.gif)
+### Options
+After setup, the integration options (**Configure** button) let you set:
+- **Device communication**: MQTT only, or prefer local LAN HTTP with MQTT fallback.
+- **Custom HTTP user agent** used for API polling.
 
-## Features
-### Massive support
-This library supports all the Meross devices currently exposed by the Meross IoT library.
-In particular Bulbs, Switches, Garage Door Openers and Smart Valves/Thermostat are fully supported and perfectly integrated with HomeAssistant.
+### API rate limits
+Meross enforces rate limits on its cloud API and MQTT broker. Avoid high-frequency polling scripts or automations, especially with many devices; the integration is push-based and does not need them.
 
 <details>
-    <summary>Have a look a the screenshots below...</summary>
+    <summary>Screenshots</summary>
 
-<img src="docs/source/images/components/meross_cloud/general-ui.png" alt="User interface" width=400> 
-<img src="docs/source/images/components/meross_cloud/bulb-control.png" alt="Controlling the light bulb" width=400> 
-<img src="docs/source/images/components/meross_cloud/garage-control.png" alt="Controlling the garage opener" width=400> 
-<img src="docs/source/images/components/meross_cloud/sensor.png" alt="Power sensor feedbacks" width=400> 
-<img src="docs/source/images/components/meross_cloud/switch-control.png" alt="Controlling switches" width=400> 
+<img src="docs/source/images/components/meross_cloud/general-ui.png" alt="User interface" width=400>
+<img src="docs/source/images/components/meross_cloud/bulb-control.png" alt="Light bulb control" width=400>
+<img src="docs/source/images/components/meross_cloud/garage-control.png" alt="Garage opener control" width=400>
+<img src="docs/source/images/components/meross_cloud/sensor.png" alt="Power sensor" width=400>
+<img src="docs/source/images/components/meross_cloud/switch-control.png" alt="Switch control" width=400>
 </details>
- 
-## :new: :rocket: A first version of the Local-Only Addon is HERE! :rocket:
-It took a bit, but eventually it's here. A very first **unstable** version of the Local Meross Addon has been developed.
-The latest version of this component, v1.2.5rc1, does support it and has been tested successfully with both a MSS210 and a MSS310 devices.
-Please note that the usage of the Local Addon is only advised for all the advanced users who are experiencing problems with Meross security
-team, complaining about high rate API calls to their systems. If you plan to use such devices off-grid, the Local Addon is what you are
-looking for. Again, be avised: it's still a work in progress and your devices might not work as expected (for now).
 
-You can find installation instructions for the Local Addon directly [here](https://github.com/albertogeniola/ha-meross-local-broker).
+## Diagnostic tool
+`tools/meross_diagnostic.py` logs into your Meross account, lists all discovered devices and prints live MQTT push events, which helps when verifying new hardware or reporting bugs:
 
-### What is the local-addon?
-Meross Plugin has gained great success and popularity among the HomeAssistant users. However, the Meross engineers are imposing
-new limits on their MQTT broker system, which cause problems to the HA users who want to implement aggressive polling or have
-more than 10 devices connected to HA. For this reason, I am working on a new HomeAssistant addon, namely "Meross Local Addon", 
-which aims at re-implementing the Meross MQTT Broker and HTTP API layer locally to the addon. This would basically allow users
-to rely only on LAN-local connection, using HomeAssistant as command center. 
+```bash
+python3 tools/meross_diagnostic.py --email "user@example.com"   # password is prompted
+python3 tools/meross_diagnostic.py --listen 30                   # listen for push events for 30 s
+python3 tools/meross_diagnostic.py --dump                        # writes meross_discovery_dump.json
+```
 
-### How to use the this Meross Component with the Local Addon?
-In order to take advantage of the Local Meross Addon, you need to follow the instructions below:
-1. Install or update the version of the Meross Custom Component via HACS (or manually, if you prefer) at least to version 1.2.5rc1, 
-which is the first one supporting the Meross Local Addon.
-1. Add the Meross Local Addon repository to your HomeAssistant installation. You can do that following the [instructions here]([url](https://github.com/albertogeniola/ha-meross-local-broker)) or simply press the following button
+Credentials can also be passed via the `MEROSS_EMAIL` and `MEROSS_PASSWORD` environment variables.
 
-    [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Falbertogeniola%2Fha-meross-local-broker)
-1. Make sure the "Meross Local Addon for Homeassistant" appears in the section of "community addons" and, if so, install it. At the time of writing the latest
-available version is *0.0.1-alpha42*. Depending on the HA hosting system and on the internect connection speed, it can take up to 20 minutes for the installation to complete.
+## Troubleshooting
+To enable debug logging, add the following to `configuration.yaml` and restart Home Assistant:
 
-    <a href="https://user-images.githubusercontent.com/4648843/174432626-51b6a569-2d95-464e-87bc-8a6fa702f9f1.png"><img src="https://user-images.githubusercontent.com/4648843/174432626-51b6a569-2d95-464e-87bc-8a6fa702f9f1.png" width=300/></a>
-    <a href="https://user-images.githubusercontent.com/4648843/174432630-031526ee-5f42-4d61-bfa2-e9badbc74675.png"><img src="https://user-images.githubusercontent.com/4648843/174432630-031526ee-5f42-4d61-bfa2-e9badbc74675.png" width=300/></a>
-1. Navigate to the configuration section of the "Meross Local Addon" and make sure the option reinit_db is OFF, while the option "advertise" is ON. Leave debug_mode OFF, unless you need to provide supplementary logging information to debug issues. Make sure you don't have any firewall blocking the network traffic to the ports indicated on this section, as the addon will receive traffic from both meross devices and pairer app on such ports.
-    
-    <a href="https://user-images.githubusercontent.com/4648843/174433609-0997e67d-adf5-4262-9c30-ea2eaae08169.png"><img src="https://user-images.githubusercontent.com/4648843/174433609-0997e67d-adf5-4262-9c30-ea2eaae08169.png" width=300></a>
-1. Navigate to the "info" panel of the addon and make sure the "Start at boot" option is ON. Also, make sure the "Show in menu" option is set to ON. Then, start the ADDON and wait at least 5 minutes. Depending on the device you are running on, the first boot may take up to 10 minutes to complete.
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.meross_cloud: debug
+```
 
-    <a href="https://user-images.githubusercontent.com/4648843/174433626-f3cb7efb-b6aa-4930-9a13-ba7a95cae678.png"><img src="https://user-images.githubusercontent.com/4648843/174433626-f3cb7efb-b6aa-4930-9a13-ba7a95cae678.png" width=300/></a>
-1. Open "Meross Local Addon" web-interface (you can either click on "Open Web UI" or click on the left menu icon <img src="https://user-images.githubusercontent.com/4648843/174433435-3b723738-7e31-4146-9237-709bd9816be5.png" width=32>. Then, from the web-ui, click on "Wizard Setup" or on "Setup"  and follow the instructions to configure your addon. For now, it's advised not to use the "Official Meross Link", as it is still under development.
+> ⚠️ Debug logs can contain account and device information. Review and redact them before sharing.
 
-    <a href="https://user-images.githubusercontent.com/4648843/174433687-deb0ee20-a4fc-4258-9553-cd5221a64b0e.png"><img src="https://user-images.githubusercontent.com/4648843/174433687-deb0ee20-a4fc-4258-9553-cd5221a64b0e.png" width=300/></a>
-    <a href="https://user-images.githubusercontent.com/4648843/174433758-69c4eb07-c00e-49f5-b041-60f36f5fef93.png"><img src="https://user-images.githubusercontent.com/4648843/174433758-69c4eb07-c00e-49f5-b041-60f36f5fef93.png" width=300/><a>
+Bugs and feature requests: [GitHub issues](https://github.com/fabilau/meross-hass/issues).
 
-1. The wizard will guide you through the Account Setup, Meross App installation and pairing process. Make sure you are able to pair at least one device.
-    Note about Step 1, credentials setup: choose the username/password you will be using locally to pair your devices. If you don't plan to "link" the local addon to the official meross broker, you can choose whatever credentials you like. For instance, you can set: 
-        username: `meross@local`
-        password: `changeme`
-1. When you have paired all the devices you want to manage locally, you can proceed with the setup of the Meross Component. 
-Navigate to the HA integration list, and proceed with the installation of the Meross Addon. During the setup phase, make sure to select local addon setup option, not the one relying on the official Meross Broker.
-    
-**NOTE**: sometimes, for yet-unknown reasons, MSS310 fails to pair with the local addon broker. However, resetting and retrying the pairing procedure a second time usually works. More recent devices, as the mss210, seem not to suffer of the same problem.
+## Development
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install pytest pytest-asyncio
+pytest tests/
+```
 
-### How to switch from a cloud based integration to a local integration
-_Credits to @olivermaor_
-
-When switching from a cloud based to a local integration, it is important that the correct sequence of steps is followed:
-1. Install the "Meross Local Addon", as described above, but do not start it yet.
-2. In the Settings - Integration panel, open the existing Meross IoT integration and copy or print the friendly names of the devices used.
-3. Go back to the Settings - Integration panel and delete the Meross IoT integration.
-4. Reboot Home Assistant.
-5. After the reboot has finished, access the file /config/.storage/core.entity_registry, and copy that file into the same directory as a backup (use a name like core.entity_registry_backup)
-6. After having backed up that file, open it (not the backup) with an editor, and find obsolete entries of entities which derive from the Meross IoT integration. Each entity is enclosed in a set of brackets (*{* *}*). Delete these entries, and only these entries, this including the respective brackets. Be careful: The entities are separated by commas, but after the last entry in the entire list, a comma may not be set.
-7. Save the amended file, and reboot Home Assistant. If you made mistakes editing the core.entity_registry file, you can still revert to the backup.
-8. Now start the "Meross Local Addon" and pair the Meross devices **one by one**, using the pairing app. After each device had been successsfully paired, rename it **in the addon**, using **exactly** the friendly name which the device had before, when you used the cloud integration. Wait until it shows "online", eventually refreshing the browser page. Only after having done that, pair the next device.
-9. Be sure you have paired all devices, and changed their "friendly names". Only then add the Meross IoT integration, and select the local broker, as described above. Your devices will be re-discovered with the correct friendly names, and can be integrated into HA.
-10. If you have followed these steps, all devices should again work with all scenes and automations as before.
-
-## Supporting my work
-As you can imagine, there is a huge work behind this repo: first I need to reverse-engineer the Meross protocols, then I need to 
-implement any "logic-layer" implemented on Meross Systems on the new addon I am developing and, eventually, I have to make
-sure that everything works together. That means that I am not able to spend much time in solving issues that may arise in 
-the meantime, and for that I apologize. If you like this project and you want to support me, please consider donating:
-that motivates me and helps me buy _more ram_ which is absolutely necessary when developing on a virtualized environment.
-
-By buying me a coffee, not only you make my development more efficient, but also motivate me to further improve 
-my work. On the other hand, buying me a beer will certainly make me happier: **a toast to you, supporter**!
-In case you are a pro and a strong opensource supporter, you might also consider [sponsoring my GitHub work](https://github.com/sponsors/albertogeniola).
-
-[![Buy me a coffe!](https://www.buymeacoffee.com/assets/img/custom_images/black_img.png)](https://www.buymeacoffee.com/albertogeniola)
-
+## License
+MIT, see [LICENSE](LICENSE).
