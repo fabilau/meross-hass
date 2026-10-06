@@ -55,14 +55,14 @@ Devices are detected by the capabilities they report to the Meross cloud, so mos
 
 ## Configuration
 Go to **Settings → Devices & Services → Add Integration** and search for **Meross Cloud IoT**.
-The setup wizard asks for the following values:
+The setup wizard first asks for the connection mode: choose **Meross Official Cloud** (default) or a **LAN-only broker** (self-hosted Meross-compatible broker, discovered via mDNS). It then asks for the following values:
 
 | Field                            | Example                      | Description |
 |----------------------------------|------------------------------|-------------|
 | HTTP API Endpoint                | `https://iotx-eu.meross.com` | Meross API endpoint for your region: <br/>- `https://iotx-eu.meross.com` (Europe) <br/>- `https://iotx-us.meross.com` (United States) <br/>- `https://iotx-ap.meross.com` (Asia/Pacific) |
 | Email Address                    | `user@example.com`           | The email address of your Meross account (same as in the Meross app). |
 | Password                         | `••••••••`                   | The password of your Meross account. |
-| MQTT Address                     | `mqtt.meross.com:443`        | MQTT broker address (`host:port`). Pre-filled with the broker of your Meross account; only change it for a self-hosted broker. |
+| MQTT Address (LAN mode only)     | `192.168.1.10:8883`          | MQTT broker address (`host:port`) of the self-hosted broker. In cloud mode the broker is taken from your Meross account. |
 | Skip MQTT certificate validation | unchecked                    | Disables TLS certificate validation of the MQTT broker. Keep unchecked for the official Meross cloud; only enable it for self-hosted brokers with self-signed certificates. |
 
 Your password is only used to obtain a session token; Home Assistant stores the token, not the password. If the token expires or your password changes, Home Assistant will ask you to re-authenticate.
@@ -115,9 +115,20 @@ Bugs and feature requests: [GitHub issues](https://github.com/fabilau/meross-has
 ## Development
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install pytest pytest-asyncio
-pytest tests/
+pip install -r requirements_test.txt
+pytest                      # unit tests against lightweight Home Assistant mocks
+
+# Optional: run everything (incl. config flow / setup tests) against a real Home Assistant (Python 3.13)
+pip install pytest-homeassistant-custom-component==0.13.316
+pytest
 ```
+
+CI runs the suite on Python 3.12/3.13 with mocks and against Home Assistant 2025.6 (the minimum in `hacs.json`) and 2026.2.
+
+### Releasing
+1. Bump `version` in `custom_components/meross_cloud/manifest.json` and add a `CHANGELOG.md` entry.
+2. Run the **Release** workflow (Actions → Release → Run workflow) with tag `v<version>` or a release candidate like `v<version>-rc1`, or push such a tag.
+3. The workflow runs all tests, verifies the tag matches the manifest version, and publishes the release with `meross_cloud.zip`. Tags with a suffix (`-rc1`, `b1`, ...) are published as pre-releases.
 
 ## License
 MIT, see [LICENSE](LICENSE).

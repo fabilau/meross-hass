@@ -1,6 +1,5 @@
 {
   "name": "Meross Integration",
   "hacs": "1.6.0",
-  "homeassistant": "2025.6",
-  "domains": ["sensor", "binary_sensor", "button", "climate", "switch", "cover", "humidifier", "light"]
+  "homeassistant": "2025.6"
 }

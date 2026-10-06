@@ -19,30 +19,11 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+          # Repository description and topics are GitHub settings, not files.
+          # Remove this once both are set on the repository page (About → ⚙).
+          ignore: "description topics"
+          comment: false
 
-  test:
-    name: Test Suite (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13"]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-          cache-dependency-path: requirements_test.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
-
-      - name: Run tests
-        run: |
-          pytest tests/ -v
+  tests:
+    name: Tests
+    uses: ./.github/workflows/tests.yml

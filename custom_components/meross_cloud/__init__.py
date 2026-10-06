@@ -120,8 +120,8 @@ class MerossCoordinator(DataUpdateCoordinator):
         self._client = None
         self._manager = None
 
-        super().__init__(hass=hass, logger=_LOGGER, name="meross_http_coordinator", update_interval=update_interval,
-                         update_method=self._async_fetch_http_data)
+        super().__init__(hass=hass, logger=_LOGGER, config_entry=config_entry, name="meross_http_coordinator",
+                         update_interval=update_interval, update_method=self._async_fetch_http_data)
 
     async def _async_fetch_http_data(self):
         try:
@@ -470,7 +470,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
     except (UnauthorizedException, HttpApiError) as ex:
         # Do not retry setup: user must update its credentials
-        if ex is UnauthorizedException or ex.error_code in (
+        if isinstance(ex, UnauthorizedException) or ex.error_code in (
                 ErrorCodes.CODE_TOKEN_INVALID,
                 ErrorCodes.CODE_TOKEN_EXPIRED,
                 ErrorCodes.CODE_TOKEN_ERROR,
@@ -509,9 +509,9 @@ async def async_unload_entry(hass, entry):
     _LOGGER.info("Removing Meross Cloud integration.")
     _LOGGER.info("Cleaning up resources...")
 
-    for platform in MEROSS_PLATFORMS:
-        _LOGGER.info(f"Cleaning up platform {platform}")
-        await hass.config_entries.async_forward_entry_unload(entry, platform)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, MEROSS_PLATFORMS)
+    if not unload_ok:
+        return False
 
     _LOGGER.info("Stopping manager...")
     manager = hass.data[DOMAIN][MANAGER]

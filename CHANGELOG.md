@@ -21,9 +21,16 @@
 - **Full Support for MS200 Smart Door and Window Sensor**:
   - Open/closed binary sensor (`door` device class) with latest sample timestamp attributes
   - Subdevice battery sensor
+- **Home Assistant Compatibility Fixes**:
+  - Fixed options dialog ("Configure") crashing on Home Assistant 2025.12+ (`OptionsFlow.config_entry` can no longer be assigned).
+  - Fixed setting light color temperature: Kelvin values were treated as mireds. Lights now use the Kelvin API (`color_temp_kelvin`, 2700–6500 K) instead of the deprecated mired properties.
+  - Fixed crash (`AttributeError`) instead of re-authentication when the API rejected the token during setup.
+  - Unloading now uses `async_unload_platforms`; the coordinator receives its config entry explicitly.
+  - Fixed `NameError` on Python < 3.14 caused by a missing `MerossCloudCreds` import.
+  - Removed invalid `domains` key from `hacs.json` (failed HACS validation).
 - **New Diagnostic Tool & Comprehensive Test Suite**:
   - Added `tools/meross_diagnostic.py` CLI tool to validate real hardware accounts and observe live push notifications.
-  - Added comprehensive automated test suite in `tests/` (39 unit & integration tests).
+  - Added automated test suite in `tests/`: unit tests with mocked Home Assistant plus config flow, setup/unload, options and reauth tests against a real Home Assistant (CI: 2025.6 and 2026.2).
 
 # 1.3.11 (2026-01-22)
 - Address #584 (fix HTTP API server breaking changes)

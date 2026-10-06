@@ -18,6 +18,19 @@ from .common import (DOMAIN, MANAGER, HA_LIGHT, DEVICE_LIST_COORDINATOR)
 
 _LOGGER = logging.getLogger(__name__)
 
+# Meross expresses color temperature as 1 (warmest) .. 100 (coldest).
+MIN_COLOR_TEMP_KELVIN = 2700
+MAX_COLOR_TEMP_KELVIN = 6500
+
+
+def kelvin_to_meross_temperature(kelvin: float) -> int:
+    norm_value = (kelvin - MIN_COLOR_TEMP_KELVIN) / (MAX_COLOR_TEMP_KELVIN - MIN_COLOR_TEMP_KELVIN)
+    return max(1, min(100, round(norm_value * 100)))
+
+
+def meross_temperature_to_kelvin(value: float) -> int:
+    return round(MIN_COLOR_TEMP_KELVIN + (value / 100.0) * (MAX_COLOR_TEMP_KELVIN - MIN_COLOR_TEMP_KELVIN))
+
 
 class MerossOilDiffuserLightDevice(DiffuserLightMixin, BaseDevice):
     """
@@ -39,6 +52,8 @@ class DiffuserLightEntityWrapper(MerossDevice, LightEntity):
     # For now, we assume OilDiffuserLight supports all the following features.
     # From Meross API it is in fact impossible to determine which exact features are supported by the device.
     _attr_supported_color_modes = {ColorMode.WHITE, ColorMode.RGB, ColorMode.COLOR_TEMP}
+    _attr_min_color_temp_kelvin = MIN_COLOR_TEMP_KELVIN
+    _attr_max_color_temp_kelvin = MAX_COLOR_TEMP_KELVIN
 
     def __init__(self,
                  channel: int,
@@ -64,10 +79,9 @@ class DiffuserLightEntityWrapper(MerossDevice, LightEntity):
             _LOGGER.debug("color change: rgb=%r -- h=%r s=%r" % (rgb, h, s))
             await self._device.async_set_light_mode(channel=self._channel_id, mode=DiffuserLightMode.FIXED_RGB, rgb=rgb, onoff=True, skip_rate_limits=True)
         elif ATTR_COLOR_TEMP_KELVIN in kwargs:
-            mired = kwargs[ATTR_COLOR_TEMP_KELVIN]
-            norm_value = (mired - self.min_mireds) / (self.max_mireds - self.min_mireds)
-            temperature = 100 - (norm_value * 100)
-            _LOGGER.debug("temperature change: mired=%r meross=%r" % (mired, temperature))
+            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
+            temperature = kelvin_to_meross_temperature(kelvin)
+            _LOGGER.debug("temperature change: kelvin=%r meross=%r" % (kelvin, temperature))
             await self._device.async_set_light_mode(channel=self._channel_id, mode=DiffuserLightMode.FIXED_LUMINANCE, onoff=True, rgb=65293, brightness=temperature, skip_rate_limits=True)
 
         # Brightness must always be set, so take previous luminance if not explicitly set now.
@@ -99,6 +113,8 @@ class DiffuserLightEntityWrapper(MerossDevice, LightEntity):
 class LightEntityWrapper(MerossDevice, LightEntity):
     """Wrapper class to adapt the Meross bulbs into the Homeassistant platform"""
     _device: MerossLightDevice
+    _attr_min_color_temp_kelvin = MIN_COLOR_TEMP_KELVIN
+    _attr_max_color_temp_kelvin = MAX_COLOR_TEMP_KELVIN
 
     def __init__(self,
                  channel: int,
@@ -127,10 +143,9 @@ class LightEntityWrapper(MerossDevice, LightEntity):
             _LOGGER.debug("color change: rgb=%r -- h=%r s=%r" % (rgb, h, s))
             await self._device.async_set_light_color(channel=self._channel_id, rgb=rgb, onoff=True, skip_rate_limits=True)
         elif ATTR_COLOR_TEMP_KELVIN in kwargs:
-            mired = kwargs[ATTR_COLOR_TEMP_KELVIN]
-            norm_value = (mired - self.min_mireds) / (self.max_mireds - self.min_mireds)
-            temperature = 100 - (norm_value * 100)
-            _LOGGER.debug("temperature change: mired=%r meross=%r" % (mired, temperature))
+            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
+            temperature = kelvin_to_meross_temperature(kelvin)
+            _LOGGER.debug("temperature change: kelvin=%r meross=%r" % (kelvin, temperature))
             await self._device.async_set_light_color(channel=self._channel_id, temperature=temperature, skip_rate_limits=True)
 
         # Brightness must always be set, so take previous luminance if not explicitly set now.
@@ -188,11 +203,11 @@ class LightEntityWrapper(MerossDevice, LightEntity):
             return None  # Return None if RGB value is not available
 
     @property
-    def color_temp(self):
+    def color_temp_kelvin(self) -> Optional[int]:
         if self._device.get_supports_temperature(channel=self._channel_id):
             value = self._device.get_color_temperature()
-            norm_value = (100 - value) / 100.0
-            return self.min_mireds + (norm_value * (self.max_mireds - self.min_mireds))
+            if value is not None:
+                return meross_temperature_to_kelvin(value)
         return None
 
 

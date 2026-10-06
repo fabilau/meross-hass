@@ -31,6 +31,7 @@ from meross_iot.model.exception import (
     CommandError,
     UnknownDeviceType
 )
+from meross_iot.model.credentials import MerossCloudCreds
 from meross_iot.model.http.device import HttpDeviceInfo
 from meross_iot.model.http.subdevice import HttpSubdeviceInfo
 from meross_iot.model.push.factory import parse_push_notification

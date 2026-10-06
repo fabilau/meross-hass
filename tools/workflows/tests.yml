@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  workflow_call:
+
+jobs:
+  unit:
+    name: Unit tests (Python ${{ matrix.python-version }}, mocked HA)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: requirements_test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_test.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  home-assistant:
+    name: Home Assistant ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Minimum version declared in hacs.json. pycares 5 breaks the aiodns pinned by HA 2025.6.
+          - label: "2025.6 (minimum)"
+            packages: "'pytest-homeassistant-custom-component==0.13.254' 'pycares<5'"
+          # pytest-homeassistant-custom-component pins an exact Home Assistant release
+          - label: "2026.2"
+            packages: "'pytest-homeassistant-custom-component==0.13.316'"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements_test.txt
+
+      - name: Install Home Assistant and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_test.txt ${{ matrix.packages }}
+          python -c "import homeassistant.const as c; print('Home Assistant', c.__version__)"
+
+      - name: Run tests against real Home Assistant
+        run: pytest tests/ -v

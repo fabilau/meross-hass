@@ -15,8 +15,11 @@ if str(repo_root) not in sys.path:
 
 # If homeassistant is not installed in the environment, install lightweight mock modules
 def _install_ha_mocks():
-    if "homeassistant" in sys.modules:
+    try:
+        import homeassistant  # noqa: F401
         return
+    except ImportError:
+        pass
 
     # Base homeassistant module
     ha = types.ModuleType("homeassistant")
@@ -69,6 +72,10 @@ def _install_ha_mocks():
     # entity
     ha.helpers.entity = types.ModuleType("homeassistant.helpers.entity")
     class MockEntity:
+        # Real HA entity/coordinator classes are generic (e.g. CoordinatorEntity[T])
+        def __class_getitem__(cls, item):
+            return cls
+
         def __init__(self, *args, **kwargs):
             self._attr_extra_state_attributes = {}
             self._attr_device_class = None
@@ -92,6 +99,9 @@ def _install_ha_mocks():
     # update_coordinator
     ha.helpers.update_coordinator = types.ModuleType("homeassistant.helpers.update_coordinator")
     class MockDataUpdateCoordinator:
+        def __class_getitem__(cls, item):
+            return cls
+
         def __init__(self, *args, **kwargs):
             self.data = {}
         async def async_request_refresh(self):
