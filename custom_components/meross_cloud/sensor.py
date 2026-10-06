@@ -340,7 +340,7 @@ class BatterySensorWrapper(GenericSensorWrapper):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        if self.native_value is None and self.online:
+        if self.native_value is None:
             self.hass.async_create_task(self._async_initial_battery_fetch())
 
     async def _async_initial_battery_fetch(self) -> None:
@@ -351,14 +351,13 @@ class BatterySensorWrapper(GenericSensorWrapper):
             _LOGGER.debug("Initial battery fetch for %s failed: %s", self.name, e)
 
     async def async_update(self):
-        if self.online:
-            try:
-                _LOGGER.debug(f"Refreshing battery state info for device {self.name}")
-                bat = await self._device.async_get_battery_life(timeout=5.0)
-                if bat is not None:
-                    self._battery_percentage = bat
-            except Exception as e:
-                _LOGGER.debug("Could not refresh battery for %s: %s", self.name, e)
+        try:
+            _LOGGER.debug(f"Refreshing battery state info for device {self.name}")
+            bat = await self._device.async_get_battery_life(timeout=5.0)
+            if bat is not None:
+                self._battery_percentage = bat
+        except Exception as e:
+            _LOGGER.debug("Could not refresh battery for %s: %s", self.name, e)
 
     async def _async_push_notification_received(self, namespace: Namespace, data: dict, device_internal_id: str):
         if namespace == Namespace.HUB_BATTERY:
