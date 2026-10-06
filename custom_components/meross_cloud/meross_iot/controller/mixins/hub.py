@@ -68,6 +68,7 @@ class HubMs100Mixin(object):
         Namespace.HUB_SENSOR_ALL: 'all',
         Namespace.HUB_SENSOR_DOORWINDOW: 'doorWindow',
         Namespace.HUB_SENSOR_SMOKE: 'smokeAlarm',
+        Namespace.HUB_BATTERY: 'battery',
     }
     _execute_command: callable
     get_subdevice: callable
@@ -96,6 +97,32 @@ class HubMs100Mixin(object):
             else:
                 await target_device.async_handle_subdevice_notification(namespace=Namespace.HUB_SENSOR_ALL, data=d)
 
+        # Batch update battery for subdevices
+        try:
+            get_subdevs_fn = getattr(self, 'get_subdevices', None)
+            subdevices = list(get_subdevs_fn()) if get_subdevs_fn else []
+            abilities = getattr(self, 'abilities', {})
+            if subdevices and (not abilities or Namespace.HUB_BATTERY.value in abilities or Namespace.HUB_BATTERY in abilities):
+                subdev_ids = [{'id': sd.subdevice_id} for sd in subdevices]
+                bat_res = await self._execute_command(method="GET",
+                                                      namespace=Namespace.HUB_BATTERY,
+                                                      payload={'battery': subdev_ids},
+                                                      timeout=timeout)
+                battery_list = bat_res.get('battery', [])
+                if isinstance(battery_list, dict):
+                    battery_list = [battery_list]
+                if isinstance(battery_list, list):
+                    for b in battery_list:
+                        if isinstance(b, dict):
+                            sd_id = b.get('id')
+                            target_sd = self.get_subdevice(subdevice_id=sd_id)
+                            if target_sd is not None:
+                                await target_sd.async_handle_subdevice_notification(
+                                    namespace=Namespace.HUB_BATTERY, data=b
+                                )
+        except Exception as e:
+            _LOGGER.debug(f"Failed to batch query battery for subdevices on hub {self.uuid}: {e}")
+
     async def async_handle_push_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
         target_data_key = self.__PUSH_MAP.get(namespace)
@@ -103,13 +130,19 @@ class HubMs100Mixin(object):
         if target_data_key is not None:
             _LOGGER.debug(f"{self.__class__.__name__} handling push notification for namespace {namespace}")
             payload = data.get(target_data_key)
+            if payload is None and namespace == Namespace.HUB_SENSOR_SMOKE:
+                payload = data.get('smoke')
+                target_data_key = 'smoke' if payload is not None else target_data_key
+
             if payload is None:
                 _LOGGER.error(
                     f"{self.__class__.__name__} could not find {target_data_key} attribute in push notification data: "
                     f"{data}")
                 locally_handled = False
             else:
-                notification_data = data.get(target_data_key, [])
+                notification_data = payload
+                if isinstance(notification_data, dict):
+                    notification_data = [notification_data]
                 for subdev_state in notification_data:
                     subdev_id = subdev_state.get('id')
 

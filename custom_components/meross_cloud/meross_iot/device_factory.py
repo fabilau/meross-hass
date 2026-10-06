@@ -82,6 +82,7 @@ _ABILITY_MATRIX = {
     Namespace.HUB_SENSOR_TEMPHUM.value: HubMs100Mixin,
     Namespace.HUB_SENSOR_DOORWINDOW.value: HubMixn,
     Namespace.HUB_SENSOR_SMOKE.value: HubMixn,
+    Namespace.HUB_BATTERY.value: HubMixn,
 
     Namespace.HUB_MTS100_ALL.value: HubMts100Mixin,
     Namespace.HUB_MTS100_MODE.value: HubMts100Mixin,

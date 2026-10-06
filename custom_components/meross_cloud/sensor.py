@@ -336,21 +336,51 @@ class BatterySensorWrapper(GenericSensorWrapper):
                          channel=channel)
 
         # Device properties
-        self._battery_percentage = None
+        self._battery_percentage = getattr(device, 'battery_info', None)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.native_value is None and self.online:
+            self.hass.async_create_task(self._async_initial_battery_fetch())
+
+    async def _async_initial_battery_fetch(self) -> None:
+        try:
+            await self.async_update()
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.debug("Initial battery fetch for %s failed: %s", self.name, e)
 
     async def async_update(self):
         if self.online:
             try:
                 _LOGGER.debug(f"Refreshing battery state info for device {self.name}")
-                self._battery_percentage = await self._device.async_get_battery_life(timeout=5.0)
+                bat = await self._device.async_get_battery_life(timeout=5.0)
+                if bat is not None:
+                    self._battery_percentage = bat
             except Exception as e:
                 _LOGGER.debug("Could not refresh battery for %s: %s", self.name, e)
 
+    async def _async_push_notification_received(self, namespace: Namespace, data: dict, device_internal_id: str):
+        if namespace == Namespace.HUB_BATTERY:
+            dev_battery = getattr(self._device, 'battery_info', None)
+            if dev_battery is not None:
+                self._battery_percentage = dev_battery
+        await super()._async_push_notification_received(namespace=namespace, data=data, device_internal_id=device_internal_id)
+
     @property
     def native_value(self) -> StateType:
-        if self._battery_percentage is not None:
-            return self._battery_percentage.remaining_charge
+        bat_info = self._battery_percentage or getattr(self._device, 'battery_info', None)
+        if bat_info is not None:
+            return bat_info.remaining_charge
         return None
+
+    @property
+    def extra_state_attributes(self):
+        attrs = {}
+        bat_info = self._battery_percentage or getattr(self._device, 'battery_info', None)
+        if bat_info is not None and getattr(bat_info, 'sample_ts', None) is not None:
+            attrs['latest_sample_time'] = bat_info.sample_ts.isoformat()
+        return attrs
 
     @property
     def should_poll(self) -> bool:

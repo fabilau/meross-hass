@@ -3,9 +3,11 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 
 from meross_iot.controller.subdevice import Ms200Sensor, Gs559aSensor
-from meross_iot.model.enums import OnlineStatus
+from meross_iot.model.enums import OnlineStatus, Namespace
+from meross_iot.model.plugin.hub import BatteryInfo
 from meross_iot.model.http.subdevice import HttpSubdeviceInfo
 from meross_iot.device_factory import build_meross_subdevice
+from custom_components.meross_cloud.common import DOMAIN
 
 from custom_components.meross_cloud.binary_sensor import (
     Ms200DoorWindowSensor,
@@ -249,3 +251,122 @@ class TestBatterySensorStability:
             mp.setattr(ms200_device, "async_get_battery_life", AsyncMock(side_effect=TimeoutError("Timeout")))
             # Should not raise exception
             await battery_sensor.async_update()
+
+    @pytest.mark.asyncio
+    async def test_battery_sensor_native_value_and_push(self, ms200_device, mock_coordinator):
+        """Verify BatterySensorWrapper.native_value reflects device battery and updates upon push."""
+        battery_sensor = BatterySensorWrapper(
+            device=ms200_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        assert battery_sensor.native_value is None
+
+        # Receive push notification with battery percentage
+        await ms200_device.async_handle_push_notification(
+            namespace=Namespace.HUB_BATTERY,
+            data={'battery': [{'id': 'sub_ms200', 'value': 85}]}
+        )
+        assert ms200_device.battery_info is not None
+        assert ms200_device.battery_info.remaining_charge == 85.0
+        assert battery_sensor.native_value == 85.0
+        assert battery_sensor.extra_state_attributes.get("latest_sample_time") is not None
+
+    @pytest.mark.asyncio
+    async def test_battery_sensor_initial_fetch_on_added_to_hass(self, ms200_device, mock_coordinator):
+        """Verify BatterySensorWrapper triggers background fetch when added to hass if battery is unknown."""
+        mock_coordinator.data = {ms200_device.uuid: MagicMock(online_status=OnlineStatus.ONLINE)}
+        battery_sensor = BatterySensorWrapper(
+            device=ms200_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        mock_hass = MagicMock()
+        def close_coro(coro):
+            coro.close()
+            return MagicMock()
+        mock_hass.async_create_task.side_effect = close_coro
+        battery_sensor.hass = mock_hass
+        battery_sensor.platform = MagicMock()
+
+        from datetime import datetime, timezone
+        fake_bat = BatteryInfo(battery_charge=92.0, sample_ts=datetime.now(timezone.utc))
+        ms200_device.async_get_battery_life = AsyncMock(return_value=fake_bat)
+
+        await battery_sensor.async_added_to_hass()
+        mock_hass.async_create_task.assert_called_once()
+
+        await battery_sensor._async_initial_battery_fetch()
+        assert battery_sensor.native_value == 92.0
+
+    @pytest.mark.asyncio
+    async def test_subdevice_get_battery_life_payload_variants(self, ms200_device):
+        """Verify GenericSubDevice.async_get_battery_life handles multiple Meross hub response formats."""
+        # 1. List format with 'value'
+        ms200_device.hub._execute_command = AsyncMock(
+            return_value={'battery': [{'id': 'sub_ms200', 'value': 77}]}
+        )
+        bat1 = await ms200_device.async_get_battery_life()
+        assert bat1 is not None
+        assert bat1.remaining_charge == 77.0
+
+        # 2. Dict format with 'battery'
+        ms200_device.hub._execute_command = AsyncMock(
+            return_value={'battery': {'id': 'sub_ms200', 'battery': 64}}
+        )
+        bat2 = await ms200_device.async_get_battery_life()
+        assert bat2 is not None
+        assert bat2.remaining_charge == 64.0
+
+        # 3. List format with 'batteryValue'
+        ms200_device.hub._execute_command = AsyncMock(
+            return_value={'battery': [{'id': 'sub_ms200', 'batteryValue': 52}]}
+        )
+        bat3 = await ms200_device.async_get_battery_life()
+        assert bat3 is not None
+        assert bat3.remaining_charge == 52.0
+
+    @pytest.mark.asyncio
+    async def test_gs559a_battery_push_and_subdevice_notification(self, gs559a_device):
+        """Verify Gs559aSensor handles battery push and subdevice notifications."""
+        await gs559a_device.async_handle_push_notification(
+            namespace=Namespace.HUB_BATTERY,
+            data={'battery': [{'id': 'sub_gs559a', 'value': 95}]}
+        )
+        assert gs559a_device.battery_info is not None
+        assert gs559a_device.battery_info.remaining_charge == 95.0
+
+        await gs559a_device.async_handle_subdevice_notification(
+            namespace=Namespace.HUB_BATTERY,
+            data={'id': 'sub_gs559a', 'value': 90}
+        )
+        assert gs559a_device.battery_info.remaining_charge == 90.0
+
+
+class TestDeviceInfoFormatting:
+    def test_ms200_device_info_clean_model_and_via_device(self, ms200_device, mock_coordinator):
+        """Verify MS200 device info does NOT have 'unknown' suffix and has via_device pointing to hub."""
+        sensor = Ms200DoorWindowSensor(
+            device=ms200_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        info = sensor.device_info
+        assert info['model'] == "ms200"
+        assert "unknown" not in info['model']
+        assert "sw_version" not in info
+        assert info['via_device'] == (DOMAIN, ms200_device.hub.internal_id)
+
+    def test_gs559a_device_info_clean_model_and_via_device(self, gs559a_device, mock_coordinator):
+        """Verify GS559A device info does NOT have 'unknown' suffix and has via_device pointing to hub."""
+        sensor = Gs559aStatusSensor(
+            device=gs559a_device,
+            device_list_coordinator=mock_coordinator,
+            channel=0,
+        )
+        info = sensor.device_info
+        assert info['model'] == "gs559a"
+        assert "unknown" not in info['model']
+        assert "sw_version" not in info
+        assert info['via_device'] == (DOMAIN, gs559a_device.hub.internal_id)
+

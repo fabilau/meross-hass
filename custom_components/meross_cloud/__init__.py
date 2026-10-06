@@ -291,13 +291,26 @@ class MerossDevice(Entity):
 
     @property
     def device_info(self):
-        return {
+        info = {
             'identifiers': {(DOMAIN, self._device.internal_id)},
             'name': self._device.name,
             'manufacturer': 'Meross',
-            'model': self._device.type + " " + self._device.hardware_version,
-            'sw_version': self._device.firmware_version
         }
+        hw = self._device.hardware_version
+        if hw and str(hw).strip().lower() not in ("unknown", "none", ""):
+            info['model'] = f"{self._device.type} {hw}"
+        else:
+            info['model'] = self._device.type
+
+        fw = self._device.firmware_version
+        if fw and str(fw).strip().lower() not in ("unknown", "none", ""):
+            info['sw_version'] = fw
+
+        hub = getattr(self._device, 'hub', None)
+        if hub is not None:
+            info['via_device'] = (DOMAIN, hub.internal_id)
+
+        return info
 
     @property
     def available(self) -> bool:

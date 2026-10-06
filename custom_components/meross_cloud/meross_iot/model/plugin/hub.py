@@ -22,3 +22,8 @@ class BatteryInfo(object):
         :return:
         """
         return self._sample_ts
+
+    @property
+    def sample_ts(self) -> datetime:
+        return self._sample_ts
+

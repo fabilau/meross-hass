@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Union, Optional, Iterable, Callable, Awaitable, Dict
 
 from meross_iot.model.constants import DEFAULT_MQTT_PORT, DEFAULT_MQTT_HOST, DEFAULT_COMMAND_TIMEOUT
@@ -124,7 +125,7 @@ class BaseDevice(object):
         Its signature must be (namespace: Namespace, data: dict, device_internal_id: str)
         :return:
         """
-        if not asyncio.iscoroutinefunction(coro):
+        if not inspect.iscoroutinefunction(coro):
             raise ValueError("The coro parameter must be a coroutine")
         if coro in self._push_coros:
             _LOGGER.error(f"Coroutine {coro} was already added to event handlers of this device")
@@ -418,12 +419,25 @@ class GenericSubDevice(BaseDevice):
         super().__init__(device_uuid=hubdevice_uuid, manager=manager, domain=hub.mqtt_host, port=hub.mqtt_port,
                          **kwargs)
         self._subdevice_id = subdevice_id
-        self._type = kwargs.get('subDeviceType')
-        self._name = kwargs.get('subDeviceName')
+        self._type = kwargs.get('subDeviceType') or kwargs.get('sub_device_type')
+        self._name = kwargs.get('subDeviceName') or kwargs.get('sub_device_name')
+        self._hwversion = kwargs.get('hardwareVersion') or kwargs.get('hdwareVersion') or kwargs.get('version')
+        self._fwversion = kwargs.get('firmwareVersion') or kwargs.get('fmwareVersion')
         self._onoff = None
         self._mode = None
         self._temperature = None
+        self._battery_info: Optional[BatteryInfo] = None
         self._hub = hub
+
+    @property
+    def battery_info(self) -> Optional[BatteryInfo]:
+        """Returns cached battery info if available."""
+        return self._battery_info
+
+    @property
+    def hub(self) -> HubDevice:
+        """Returns the hub device this subdevice is connected to."""
+        return self._hub
 
     async def _execute_command(self,
                                method: str,
@@ -441,7 +455,6 @@ class GenericSubDevice(BaseDevice):
         """
         Performs a full device update of the device attributes.
         """
-
         # The default implementation of the async_update for a GenericSubdevice will just issue an update
         # at hub-level
         await super().async_update(*args, **kwargs)
@@ -449,22 +462,81 @@ class GenericSubDevice(BaseDevice):
     async def async_get_battery_life(self,
                                      timeout: Optional[float] = None,
                                      *args,
-                                     **kwargs) -> BatteryInfo:
+                                     **kwargs) -> Optional[BatteryInfo]:
         """
         Polls the HUB/DEVICE to get its current battery status.
-        :return:
+        :return: BatteryInfo or None
         """
-        data = await self._hub._execute_command(method='GET',
-                                                namespace=Namespace.HUB_BATTERY,
-                                                payload={'battery': [{'id': self.subdevice_id}]},
-                                                timeout=timeout)
-        battery_life_perc = data.get('battery', {})[0].get('value')
-        timestamp = datetime.utcnow()
-        return BatteryInfo(battery_charge=battery_life_perc, sample_ts=timestamp)
+        try:
+            data = await self._hub._execute_command(method='GET',
+                                                    namespace=Namespace.HUB_BATTERY,
+                                                    payload={'battery': [{'id': self.subdevice_id}]},
+                                                    timeout=timeout)
+        except Exception as e:
+            _LOGGER.debug("Failed to query battery for %s (%s): %s", self.name, self.subdevice_id, e)
+            return self._battery_info
+
+        battery_list = data.get('battery') if isinstance(data, dict) else None
+        battery_item = None
+        if isinstance(battery_list, list):
+            for item in battery_list:
+                if isinstance(item, dict) and item.get('id') == self.subdevice_id:
+                    battery_item = item
+                    break
+            if battery_item is None and len(battery_list) > 0 and isinstance(battery_list[0], dict):
+                battery_item = battery_list[0]
+        elif isinstance(battery_list, dict):
+            battery_item = battery_list
+
+        if battery_item is not None:
+            raw_val = (
+                battery_item.get('value')
+                if battery_item.get('value') is not None
+                else battery_item.get('battery')
+                if battery_item.get('battery') is not None
+                else battery_item.get('batteryValue')
+            )
+            if raw_val is not None:
+                try:
+                    perc = float(raw_val)
+                    self._battery_info = BatteryInfo(battery_charge=perc, sample_ts=datetime.now(timezone.utc))
+                    return self._battery_info
+                except (ValueError, TypeError):
+                    pass
+
+        return self._battery_info
 
     async def async_handle_subdevice_notification(self, namespace: Namespace, data: dict) -> bool:
-        _LOGGER.error("Unhandled/NotImplemented event handler for %s (data: %s) - Subdevice %s (hub %s)", namespace,
-                      json.dumps(data), self.subdevice_id, self._hub.uuid)
+        if namespace == Namespace.HUB_BATTERY:
+            raw_val = (
+                data.get('value')
+                if data.get('value') is not None
+                else data.get('battery')
+                if data.get('battery') is not None
+                else data.get('batteryValue')
+            )
+            if raw_val is not None:
+                try:
+                    self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
+                    return True
+                except (ValueError, TypeError):
+                    pass
+        elif namespace == Namespace.HUB_SENSOR_ALL:
+            battery_data = data.get('battery') or data.get('batteryValue')
+            if battery_data is not None:
+                raw_val = None
+                if isinstance(battery_data, (int, float)):
+                    raw_val = battery_data
+                elif isinstance(battery_data, dict):
+                    raw_val = battery_data.get('value') or battery_data.get('battery')
+                if raw_val is not None:
+                    try:
+                        self._battery_info = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
+                        return True
+                    except (ValueError, TypeError):
+                        pass
+
+        _LOGGER.debug("Unhandled/unprocessed event %s for subdevice %s", namespace, self.subdevice_id)
         return False
 
     @property
