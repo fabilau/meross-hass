@@ -11,6 +11,7 @@ jobs:
   validate-hacs:
     name: HACS Validation
     runs-on: ubuntu-latest
+    if: "!github.event.repository.private"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

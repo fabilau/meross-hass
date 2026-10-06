@@ -327,3 +327,29 @@ class TestGs559aSensor:
         )
         assert sensor.is_muted is True
         assert sensor.status == 27
+
+
+class TestManifestAndHacsJson:
+    def test_manifest_and_hacs_structure(self):
+        import json
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parent.parent
+        manifest_path = repo_root / "custom_components" / "meross_cloud" / "manifest.json"
+        hacs_path = repo_root / "hacs.json"
+
+        assert manifest_path.is_file(), "manifest.json must exist"
+        assert hacs_path.is_file(), "hacs.json must exist"
+
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest.get("domain") == "meross_cloud"
+        assert manifest.get("name")
+        assert manifest.get("version")
+        assert manifest.get("documentation")
+        assert manifest.get("issue_tracker")
+        assert isinstance(manifest.get("codeowners"), list)
+
+        hacs = json.loads(hacs_path.read_text())
+        assert hacs.get("name")
+        assert "domains" not in hacs, "'domains' key is forbidden in hacs.json"
+
