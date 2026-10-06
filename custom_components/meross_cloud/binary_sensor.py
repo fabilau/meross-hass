@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import logging
 from datetime import timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from meross_iot.controller.device import BaseDevice
 from meross_iot.controller.subdevice import Ms405Sensor, Ms200Sensor, Gs559aSensor

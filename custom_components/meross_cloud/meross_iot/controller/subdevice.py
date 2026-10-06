@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import logging
 from collections import deque
 from datetime import datetime, timezone
-from typing import Optional, Iterable, List, Dict
+from typing import Optional, Iterable, List, Dict, Union
 
 from meross_iot.controller.device import GenericSubDevice
 from meross_iot.model.enums import OnlineStatus, ThermostatV3Mode
