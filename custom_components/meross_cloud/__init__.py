@@ -1,4 +1,6 @@
 """Meross devices platform loader"""
+from __future__ import annotations
+
 import asyncio
 import logging
 import sys
