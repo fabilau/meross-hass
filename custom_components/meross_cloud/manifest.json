@@ -1,13 +1,14 @@
 {
   "domain": "meross_cloud",
   "name": "Meross Cloud IoT",
-  "documentation": "https://github.com/fabilau/meross-hass",
-  "issue_tracker": "https://github.com/fabilau/meross-hass/issues",
-  "dependencies": ["persistent_notification"],
+  "after_dependencies": ["zeroconf"],
   "codeowners": ["@fabilau"],
-  "requirements": ["pycryptodomex>=3.20.0", "paho-mqtt>=2.1.0"],
   "config_flow": true,
-  "quality_scale": "platinum",
+  "dependencies": ["persistent_notification"],
+  "documentation": "https://github.com/fabilau/meross-hass",
   "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/fabilau/meross-hass/issues",
+  "quality_scale": "platinum",
+  "requirements": ["pycryptodomex>=3.20.0", "paho-mqtt>=2.1.0"],
   "version": "1.4.3"
 }

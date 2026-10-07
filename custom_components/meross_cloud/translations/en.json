@@ -1,4 +1,5 @@
 {
+  "title": "Meross Cloud IoT",
   "config": {
     "abort": {
       "single_instance_allowed": "Only a single configuration of Meross is allowed."
@@ -33,8 +34,7 @@
         "title": "Reauthentication required",
         "description": "The Meross integration needs to re-authenticate your account"
       }
-    },
-    "title": "Meross"
+    }
   },
   "options": {
     "error": {},

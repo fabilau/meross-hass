@@ -1,6 +1,6 @@
 {
+  "title": "Meross Cloud IoT",
   "config": {
-    "title": "Meross",
     "step": {
       "user": {
         "title": "Chose broker",
