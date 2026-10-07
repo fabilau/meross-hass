@@ -312,8 +312,6 @@ class MerossDevice(Entity):
             info['sw_version'] = fw
 
         hub = getattr(self._device, 'hub', None)
-        if hub is not None:
-            info['via_device'] = (DOMAIN, hub.internal_id)
 
         return info
 
@@ -521,6 +519,7 @@ async def update_listener(hass, entry):
     # http user agent to be used. It's not nice, but until a public setter gets exposed, we need
     # to do so.
     manager._http_client._ua_header = custom_ua
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass, entry):

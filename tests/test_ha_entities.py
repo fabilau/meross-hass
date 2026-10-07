@@ -491,8 +491,8 @@ class TestBatterySensorStability:
 
 
 class TestDeviceInfoFormatting:
-    def test_ms200_device_info_clean_model_and_via_device(self, ms200_device, mock_coordinator):
-        """Verify MS200 device info does NOT have 'unknown' suffix and has via_device pointing to hub."""
+    def test_ms200_device_info_clean_model_and_no_deprecated_via_device(self, ms200_device, mock_coordinator):
+        """Verify MS200 device info does NOT have 'unknown' suffix and omits deprecated via_device."""
         sensor = Ms200DoorWindowSensor(
             device=ms200_device,
             device_list_coordinator=mock_coordinator,
@@ -502,10 +502,10 @@ class TestDeviceInfoFormatting:
         assert info['model'] == "ms200"
         assert "unknown" not in info['model']
         assert "sw_version" not in info
-        assert info['via_device'] == (DOMAIN, ms200_device.hub.internal_id)
+        assert "via_device" not in info
 
-    def test_gs559a_device_info_clean_model_and_via_device(self, gs559a_device, mock_coordinator):
-        """Verify GS559A device info does NOT have 'unknown' suffix and has via_device pointing to hub."""
+    def test_gs559a_device_info_clean_model_and_no_deprecated_via_device(self, gs559a_device, mock_coordinator):
+        """Verify GS559A device info does NOT have 'unknown' suffix and omits deprecated via_device."""
         sensor = Gs559aStatusSensor(
             device=gs559a_device,
             device_list_coordinator=mock_coordinator,
@@ -515,5 +515,5 @@ class TestDeviceInfoFormatting:
         assert info['model'] == "gs559a"
         assert "unknown" not in info['model']
         assert "sw_version" not in info
-        assert info['via_device'] == (DOMAIN, gs559a_device.hub.internal_id)
+        assert "via_device" not in info
 

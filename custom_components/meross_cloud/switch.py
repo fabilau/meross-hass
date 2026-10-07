@@ -117,7 +117,10 @@ class DndEntityWrapper(MerossDevice, SwitchEntity):
     async def async_update(self):
         if self.online:
             await super().async_update()
-            self._dnd_mode = await self._device.async_get_dnd_mode()
+            try:
+                self._dnd_mode = await self._device.async_get_dnd_mode()
+            except Exception as e:
+                _LOGGER.debug("Could not refresh DND mode for %s: %s", self.name, e)
 
     @property
     def is_on(self) -> bool | None:
@@ -165,7 +168,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
             if w.unique_id not in hass.data[DOMAIN]["ADDED_ENTITIES_IDS"]:
                 new_entities.append(w)
 
-        async_add_entities(new_entities, True)
+        async_add_entities(new_entities, False)
 
     coordinator = hass.data[DOMAIN][DEVICE_LIST_COORDINATOR]
     coordinator.async_add_listener(entity_adder_callback)

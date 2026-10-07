@@ -711,7 +711,7 @@ class MerossManager(object):
             # If the message is a PUSHACK/GETACK/ERROR, check if there is any pending command waiting for it and, if so,
             # resolve its future
             message_id = header.get("messageId")
-            future = self._pending_messages_futures.get(message_id)
+            future = self._pending_messages_futures.pop(message_id, None)
             if future is not None:
                 _LOGGER.debug("Found a pending command waiting for response message")
                 if message_method == "ERROR":
@@ -732,7 +732,6 @@ class MerossManager(object):
                         f"Unhandled message method {message_method}. Please report it to the developer."
                         f"raw_msg: {msg}"
                     )
-                del self._pending_messages_futures[message_id]
         # Check case 3: PUSH notification.
         # Again, here we don't check the source topic, we trust that's legitimate.
         elif (

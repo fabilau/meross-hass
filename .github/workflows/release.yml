@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, must match manifest.json version (e.g. v1.4.0 or v1.4.0-rc1)'
+        description: 'Release tag, must match manifest.json version (e.g. v1.4.1 or v1.4.1-rc1)'
         required: true
         type: string
-        default: 'v1.4.0'
+        default: 'v1.4.1'
       prerelease:
         description: 'Mark as pre-release (tags with a suffix such as -rc1 are always pre-releases)'
         required: false
@@ -43,6 +43,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${INPUT_TAG}"
+            TARGET_VER="$(echo "${TAG#v}" | sed -E 's/[-+].*$//')"
+            python3 -c "import json; p='custom_components/meross_cloud/manifest.json'; d=json.load(open(p)); d['version']='$TARGET_VER'; json.dump(d, open(p, 'w'), indent=2); open(p, 'a').write('\n')"
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi

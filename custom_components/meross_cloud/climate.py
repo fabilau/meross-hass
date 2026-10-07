@@ -295,7 +295,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
                     new_entities.append(w)
 
         # Add all entities to HA
-        async_add_entities(new_entities, True)
+        async_add_entities(new_entities, False)
 
     coordinator = hass.data[DOMAIN][DEVICE_LIST_COORDINATOR]
     coordinator.async_add_listener(entity_adder_callback)

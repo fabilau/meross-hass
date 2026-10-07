@@ -115,3 +115,4 @@ meross_discovery_dump.json
 .local_debug/data/mqtt/certs/ca.srl
 .local_debug/data/mqtt/certs/server.crt
 .local_debug/data/mqtt/certs/server.key
+.ha_test_config/

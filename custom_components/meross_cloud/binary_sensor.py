@@ -72,7 +72,10 @@ class Ms200DoorWindowSensor(MerossDevice, BinarySensorEntity):
             _LOGGER.debug("Initial update for %s failed: %s", self.entity_id, e)
 
     async def async_update(self) -> None:
-        await self._device.async_update()
+        try:
+            await self._device.async_update()
+        except Exception as e:
+            _LOGGER.debug("Update for %s failed: %s", self.name, e)
 
     @property
     def should_poll(self) -> bool:
@@ -120,7 +123,10 @@ class Gs559aSmokeAlarmSensor(MerossDevice, BinarySensorEntity):
             _LOGGER.debug("Initial update for %s failed: %s", self.entity_id, e)
 
     async def async_update(self) -> None:
-        await self._device.async_update()
+        try:
+            await self._device.async_update()
+        except Exception as e:
+            _LOGGER.debug("Update for %s failed: %s", self.name, e)
 
     @property
     def should_poll(self) -> bool:
@@ -283,7 +289,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
                     Gs559aAlarmMutedSensor(device=sms, device_list_coordinator=coordinator, channel=channel_index))
 
         unique_new_devs = filter(lambda d: d.unique_id not in hass.data[DOMAIN]["ADDED_ENTITIES_IDS"], new_entities)
-        async_add_entities(list(unique_new_devs), True)
+        async_add_entities(list(unique_new_devs), False)
 
     coordinator = hass.data[DOMAIN][DEVICE_LIST_COORDINATOR]
     coordinator.async_add_listener(entity_adder_callback)

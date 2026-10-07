@@ -11,7 +11,7 @@ from meross_iot.controller.mixins.consumption import ConsumptionXMixin
 from meross_iot.controller.mixins.electricity import ElectricityMixin
 from meross_iot.controller.subdevice import Ms100Sensor, Mts100v3Valve, Gs559aSensor
 from meross_iot.manager import MerossManager
-from meross_iot.model.enums import OnlineStatus
+from meross_iot.model.enums import OnlineStatus, Namespace
 from meross_iot.model.exception import CommandTimeoutError
 from meross_iot.model.http.device import HttpDeviceInfo
 
@@ -450,7 +450,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
             new_entities.append(BatterySensorWrapper(device=s, device_list_coordinator=coordinator, channel=0))
 
         unique_new_devs = filter(lambda d: d.unique_id not in hass.data[DOMAIN]["ADDED_ENTITIES_IDS"], new_entities)
-        async_add_entities(list(unique_new_devs), True)
+        async_add_entities(list(unique_new_devs), False)
 
     coordinator = hass.data[DOMAIN][DEVICE_LIST_COORDINATOR]
     coordinator.async_add_listener(entity_adder_callback)
