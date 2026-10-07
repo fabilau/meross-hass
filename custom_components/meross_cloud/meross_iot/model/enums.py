@@ -77,7 +77,7 @@ class DNDMode(Enum):
     DND_ENABLED = 1
 
 
-class Namespace(Enum):
+class Namespace(str, Enum):
     # Common abilities
     SYSTEM_ALL = 'Appliance.System.All'
     SYSTEM_ABILITY = 'Appliance.System.Ability'

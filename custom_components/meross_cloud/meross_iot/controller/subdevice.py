@@ -638,7 +638,10 @@ class Ms200Sensor(GenericSubDevice):
             if isinstance(status, dict):
                 status = status.get('status', status.get('state', status.get('open')))
             str_val = str(status).strip().lower()
-            self._is_open = (status == 1 or status is True or str_val in ('1', 'open', 'true', 'opened'))
+            if status == 0 or status is False or str_val in ('0', 'close', 'closed', 'false'):
+                self._is_open = False
+            else:
+                self._is_open = True
             self._online = OnlineStatus.ONLINE
         if timestamp is not None:
             self._last_sample_time = timestamp
@@ -690,8 +693,8 @@ class Ms200Sensor(GenericSubDevice):
                         locally_handled = True
                     except (ValueError, TypeError):
                         pass
-        elif namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-            door_window = data.get('doorWindow') or data.get('door')
+        elif namespace in (Namespace.HUB_SENSOR_DOORWINDOW, Namespace.HUB_SENSOR_ALERT):
+            door_window = data.get('doorWindow') or data.get('door') or data.get('alert')
             target_item = None
             if isinstance(door_window, list):
                 for item in door_window:
@@ -710,7 +713,7 @@ class Ms200Sensor(GenericSubDevice):
                 target_item = data
 
             if target_item is not None:
-                sub_door = target_item.get('doorWindow') or target_item.get('door') if isinstance(target_item.get('doorWindow') or target_item.get('door'), dict) else target_item
+                sub_door = target_item.get('doorWindow') or target_item.get('door') or target_item.get('alert') if isinstance(target_item.get('doorWindow') or target_item.get('door') or target_item.get('alert'), dict) else target_item
                 status = sub_door.get('status')
                 if status is None:
                     status = sub_door.get('state')
@@ -744,8 +747,8 @@ class Ms200Sensor(GenericSubDevice):
                     locally_handled = True
                 except (ValueError, TypeError):
                     pass
-        elif namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-            sub_door = data.get('doorWindow') or data.get('door')
+        elif namespace in (Namespace.HUB_SENSOR_DOORWINDOW, Namespace.HUB_SENSOR_ALERT):
+            sub_door = data.get('doorWindow') or data.get('door') or data.get('alert')
             if not isinstance(sub_door, dict) and isinstance(data, dict):
                 sub_door = data
             if isinstance(sub_door, dict):

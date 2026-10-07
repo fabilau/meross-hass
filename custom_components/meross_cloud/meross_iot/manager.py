@@ -733,14 +733,11 @@ class MerossManager(object):
                         f"raw_msg: {msg}"
                     )
         # Check case 3: PUSH notification.
-        # Again, here we don't check the source topic, we trust that's legitimate.
-        elif (
-                destination_topic == build_client_user_topic(self._cloud_creds.user_id)
-                and message_method == "PUSH"
-        ):
+        # Accept any message where message_method is PUSH (regardless of topic format)
+        elif message_method == "PUSH":
             namespace = header.get("namespace")
             payload = message.get("payload")
-            origin_device_uuid = device_uuid_from_push_notification(source_topic)
+            origin_device_uuid = header.get("uuid") or device_uuid_from_push_notification(source_topic)
 
             parsed_push_notification = parse_push_notification(
                 namespace=namespace,
@@ -776,6 +773,23 @@ class MerossManager(object):
             device_uuids=(push_notification.originating_device_uuid,),
             exclude_classes=(GenericSubDevice,)
         )
+        if len(target_devs) < 1 and push_notification.originating_device_uuid:
+            # Fallback 1: check if originating_device_uuid matches a subdevice and find its hub
+            subdevs = self._device_registry.find_all_by(
+                device_uuids=(push_notification.originating_device_uuid,),
+            )
+            for sd in subdevs:
+                if hasattr(sd, 'hub') and sd.hub is not None and sd.hub not in target_devs:
+                    target_devs.append(sd.hub)
+
+        # Fallback 2: check if any subdevice ID in the payload matches a registered subdevice
+        if len(target_devs) < 1 and isinstance(push_notification.raw_data, dict):
+            raw_str = json.dumps(push_notification.raw_data)
+            for dev in self._device_registry.find_all_by():
+                if hasattr(dev, 'subdevice_id') and dev.subdevice_id:
+                    if str(dev.subdevice_id).lower() in raw_str.lower():
+                        if hasattr(dev, 'hub') and dev.hub is not None and dev.hub not in target_devs:
+                            target_devs.append(dev.hub)
         dev = None
 
         if len(target_devs) < 1:

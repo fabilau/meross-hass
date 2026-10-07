@@ -7,7 +7,7 @@ from typing import Dict, Optional, Union
 from meross_iot.controller.device import BaseDevice
 from meross_iot.controller.subdevice import Ms405Sensor, Ms200Sensor, Gs559aSensor
 from meross_iot.manager import MerossManager
-from meross_iot.model.enums import OnlineStatus
+from meross_iot.model.enums import OnlineStatus, Namespace
 from meross_iot.model.http.device import HttpDeviceInfo
 
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
@@ -76,6 +76,18 @@ class Ms200DoorWindowSensor(MerossDevice, BinarySensorEntity):
             await self._device.async_update()
         except Exception as e:
             _LOGGER.debug("Update for %s failed: %s", self.name, e)
+
+    async def _async_push_notification_received(self, namespace: Namespace, data: dict, device_internal_id: str):
+        if namespace in (Namespace.HUB_SENSOR_DOORWINDOW, Namespace.HUB_SENSOR_ALERT, Namespace.HUB_SENSOR_ALL):
+            door_data = data.get('doorWindow') or data.get('door') or data.get('alert') or data
+            if isinstance(door_data, list) and len(door_data) > 0:
+                door_data = door_data[0]
+            if isinstance(door_data, dict):
+                st = door_data.get('status') if 'status' in door_data else door_data.get('state')
+                ts = door_data.get('lmTime') or door_data.get('time')
+                if st is not None:
+                    self._device._handle_door_window_data(status=st, timestamp=ts)
+        await super()._async_push_notification_received(namespace=namespace, data=data, device_internal_id=device_internal_id)
 
     @property
     def should_poll(self) -> bool:

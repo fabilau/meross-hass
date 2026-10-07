@@ -8,6 +8,38 @@ from meross_iot.model.enums import Namespace
 _LOGGER = logging.getLogger(__name__)
 
 
+def _extract_hub_subdevice_payload(namespace: Namespace, data: dict, push_map: dict) -> list[dict]:
+    target_data_key = push_map.get(namespace)
+    payload = data.get(target_data_key) if (target_data_key and isinstance(data, dict)) else None
+
+    if payload is None and isinstance(data, dict):
+        if namespace == Namespace.HUB_SENSOR_SMOKE:
+            payload = data.get('smoke') or data.get('smokeAlarm')
+        elif namespace == Namespace.HUB_SENSOR_DOORWINDOW:
+            payload = data.get('door') or data.get('doorWindow') or data.get('doorWindowSensor')
+        elif namespace == Namespace.HUB_SENSOR_ALERT:
+            payload = data.get('alert') or data.get('alarm')
+        elif namespace == Namespace.HUB_BATTERY:
+            payload = data.get('battery')
+        elif namespace == Namespace.HUB_SENSOR_TEMPHUM:
+            payload = data.get('tempHum') or data.get('temperature')
+        elif namespace == Namespace.HUB_SENSOR_WATERLEAK:
+            payload = data.get('waterLeak')
+
+    if payload is None and isinstance(data, dict):
+        payload = data.get('subdevice') or data.get('subdevices') or data.get('all')
+    if payload is None and isinstance(data, list):
+        payload = data
+    elif payload is None and isinstance(data, dict) and ('id' in data or 'subDeviceId' in data):
+        payload = [data]
+
+    if isinstance(payload, dict):
+        return [payload]
+    elif isinstance(payload, list):
+        return [p for p in payload if isinstance(p, dict)]
+    return []
+
+
 class HubMixn(object):
     __PUSH_MAP = {
         Namespace.HUB_ONLINE: 'online',
@@ -16,6 +48,7 @@ class HubMixn(object):
         Namespace.HUB_SENSOR_WATERLEAK: 'waterLeak',
         Namespace.HUB_SENSOR_DOORWINDOW: 'doorWindow',
         Namespace.HUB_SENSOR_SMOKE: 'smokeAlarm',
+        Namespace.HUB_SENSOR_ALERT: 'alert',
     }
 
     def __init__(self, device_uuid: str,
@@ -25,39 +58,25 @@ class HubMixn(object):
 
     async def async_handle_push_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
-        target_data_key = self.__PUSH_MAP.get(namespace)
+        notification_items = _extract_hub_subdevice_payload(namespace=namespace, data=data, push_map=self.__PUSH_MAP)
 
-        if target_data_key is not None:
+        if notification_items:
             _LOGGER.debug(f"{self.__class__.__name__} handling push notification for namespace {namespace}")
-            payload = data.get(target_data_key)
-            if payload is None and namespace == Namespace.HUB_SENSOR_SMOKE:
-                payload = data.get('smoke')
-                target_data_key = 'smoke' if payload is not None else target_data_key
-            elif payload is None and namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-                payload = data.get('door')
-                target_data_key = 'door' if payload is not None else target_data_key
+            for subdev_state in notification_items:
+                subdev_id = subdev_state.get('id') or subdev_state.get('subDeviceId')
 
-            if payload is None:
-                _LOGGER.error(f"{self.__class__.__name__} could not find {target_data_key} attribute in push notification data: "
-                              f"{data}")
-                locally_handled = False
-            else:
-                notification_data = payload
-                if isinstance(notification_data, dict):
-                    notification_data = [notification_data]
-                for subdev_state in notification_data:
-                    subdev_id = subdev_state.get('id')
-
-                    # Check the specific subdevice has been registered with this hub...
-                    subdev = self.get_subdevice(subdevice_id=subdev_id)
-                    if subdev is None:
-                        _LOGGER.warning(
-                            f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
-                            f"registered with this hub. The update will be skipped.")
-                        continue
-                    else:
-                        await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
-                locally_handled = True
+                # Check the specific subdevice has been registered with this hub...
+                subdev = self.get_subdevice(subdevice_id=subdev_id)
+                if subdev is None:
+                    _LOGGER.warning(
+                        f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
+                        f"registered with this hub. The update will be skipped.")
+                    continue
+                else:
+                    await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
+            locally_handled = True
+        elif namespace in self.__PUSH_MAP:
+            _LOGGER.debug(f"{self.__class__.__name__} could not extract items from push data for namespace {namespace}: {data}")
 
         # Always call the parent handler when done with local specific logic. This gives the opportunity to all
         # ancestors to catch all events.
@@ -67,7 +86,6 @@ class HubMixn(object):
 
 class HubMs100Mixin(object):
     __PUSH_MAP = {
-        # TODO: check this
         Namespace.HUB_SENSOR_ALERT: 'alert',
         Namespace.HUB_SENSOR_TEMPHUM: 'tempHum',
         Namespace.HUB_SENSOR_ALL: 'all',
@@ -108,10 +126,9 @@ class HubMs100Mixin(object):
             subdevices = list(get_subdevs_fn()) if get_subdevs_fn else []
             abilities = getattr(self, 'abilities', {})
             if subdevices and (not abilities or Namespace.HUB_BATTERY.value in abilities or Namespace.HUB_BATTERY in abilities):
-                subdev_ids = [{'id': sd.subdevice_id} for sd in subdevices]
                 bat_res = await self._execute_command(method="GET",
                                                       namespace=Namespace.HUB_BATTERY,
-                                                      payload={'battery': subdev_ids},
+                                                      payload={'battery': []},
                                                       timeout=timeout)
                 battery_list = bat_res.get('battery', [])
                 if isinstance(battery_list, dict):
@@ -130,40 +147,23 @@ class HubMs100Mixin(object):
 
     async def async_handle_push_notification(self, namespace: Namespace, data: dict) -> bool:
         locally_handled = False
-        target_data_key = self.__PUSH_MAP.get(namespace)
+        notification_items = _extract_hub_subdevice_payload(namespace=namespace, data=data, push_map=self.__PUSH_MAP)
 
-        if target_data_key is not None:
+        if notification_items:
             _LOGGER.debug(f"{self.__class__.__name__} handling push notification for namespace {namespace}")
-            payload = data.get(target_data_key)
-            if payload is None and namespace == Namespace.HUB_SENSOR_SMOKE:
-                payload = data.get('smoke')
-                target_data_key = 'smoke' if payload is not None else target_data_key
-            elif payload is None and namespace == Namespace.HUB_SENSOR_DOORWINDOW:
-                payload = data.get('door')
-                target_data_key = 'door' if payload is not None else target_data_key
+            for subdev_state in notification_items:
+                subdev_id = subdev_state.get('id') or subdev_state.get('subDeviceId')
 
-            if payload is None:
-                _LOGGER.error(
-                    f"{self.__class__.__name__} could not find {target_data_key} attribute in push notification data: "
-                    f"{data}")
-                locally_handled = False
-            else:
-                notification_data = payload
-                if isinstance(notification_data, dict):
-                    notification_data = [notification_data]
-                for subdev_state in notification_data:
-                    subdev_id = subdev_state.get('id')
-
-                    # Check the specific subdevice has been registered with this hub...
-                    subdev = self.get_subdevice(subdevice_id=subdev_id)
-                    if subdev is None:
-                        _LOGGER.warning(
-                            f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
-                            f"registered with this hub. The update will be skipped.")
-                        continue
-                    else:
-                        await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
-                locally_handled = True
+                # Check the specific subdevice has been registered with this hub...
+                subdev = self.get_subdevice(subdevice_id=subdev_id)
+                if subdev is None:
+                    _LOGGER.warning(
+                        f"Received an update for a subdevice (id {subdev_id}) that has not yet been "
+                        f"registered with this hub. The update will be skipped.")
+                    continue
+                else:
+                    await subdev.async_handle_subdevice_notification(namespace=namespace, data=subdev_state)
+            locally_handled = True
 
         # Always call the parent handler when done with local specific logic. This gives the opportunity to all
         # ancestors to catch all events.

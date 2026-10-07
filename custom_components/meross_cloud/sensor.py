@@ -346,6 +346,8 @@ class BatterySensorWrapper(GenericSensorWrapper):
             self.hass.async_create_task(self._async_initial_battery_fetch())
 
     async def _async_initial_battery_fetch(self) -> None:
+        if self.native_value is not None:
+            return
         try:
             await self.async_update()
             self.async_write_ha_state()
@@ -366,6 +368,13 @@ class BatterySensorWrapper(GenericSensorWrapper):
             dev_battery = getattr(self._device, 'battery_info', None)
             if dev_battery is not None:
                 self._battery_percentage = dev_battery
+            elif isinstance(data, dict):
+                raw_val = data.get('value') if 'value' in data else data.get('battery')
+                if raw_val is not None:
+                    try:
+                        self._battery_percentage = BatteryInfo(battery_charge=float(raw_val), sample_ts=datetime.now(timezone.utc))
+                    except Exception:
+                        pass
         await super()._async_push_notification_received(namespace=namespace, data=data, device_internal_id=device_internal_id)
 
     @property

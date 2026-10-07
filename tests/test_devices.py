@@ -141,6 +141,74 @@ class TestMs200Sensor:
         assert sensor.is_open is False
         assert sensor.online_status == OnlineStatus.ONLINE
 
+    @pytest.mark.asyncio
+    async def test_push_notification_alert_namespace(self, mock_hub_and_manager):
+        _, mock_manager = mock_hub_and_manager
+        sensor = Ms200Sensor(
+            hubdevice_uuid="hub_1",
+            subdevice_id="sub_1",
+            manager=mock_manager,
+            subdevice_type="ms200",
+            name="Front Door",
+        )
+
+        # Alert event: Door opened / Alert triggered (status = 1)
+        alert_open = {
+            "alert": [
+                {
+                    "id": "sub_1",
+                    "status": 1,
+                    "lmTime": 1700003000,
+                }
+            ]
+        }
+        handled = await sensor.async_handle_push_notification(
+            Namespace.HUB_SENSOR_ALERT, alert_open
+        )
+        assert handled is True
+        assert sensor.is_open is True
+        assert sensor.latest_sample_time == 1700003000
+
+        # Alert event: Door closed (status = 0)
+        alert_closed = {
+            "alert": [
+                {
+                    "id": "sub_1",
+                    "status": 0,
+                    "lmTime": 1700003010,
+                }
+            ]
+        }
+        handled = await sensor.async_handle_push_notification(
+            Namespace.HUB_SENSOR_ALERT, alert_closed
+        )
+        assert handled is True
+        assert sensor.is_open is False
+        assert sensor.latest_sample_time == 1700003010
+
+    @pytest.mark.asyncio
+    async def test_subdevice_notification_alert_namespace(self, mock_hub_and_manager):
+        _, mock_manager = mock_hub_and_manager
+        sensor = Ms200Sensor(
+            hubdevice_uuid="hub_1",
+            subdevice_id="sub_1",
+            manager=mock_manager,
+            subdevice_type="ms200",
+            name="Front Door",
+        )
+
+        alert_item = {
+            "id": "sub_1",
+            "status": 1,
+            "lmTime": 1700004000,
+        }
+        handled = await sensor.async_handle_subdevice_notification(
+            Namespace.HUB_SENSOR_ALERT, alert_item
+        )
+        assert handled is True
+        assert sensor.is_open is True
+
+
 
 class TestGs559aSensor:
     def test_factory_creation(self, mock_hub_and_manager):

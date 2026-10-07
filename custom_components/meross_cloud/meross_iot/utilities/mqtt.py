@@ -37,7 +37,12 @@ def device_uuid_from_push_notification(from_topic: str):
     :param from_topic:
     :return:
     """
-    return from_topic.split('/')[2]
+    if not from_topic or not isinstance(from_topic, str):
+        return None
+    parts = [p for p in from_topic.strip("/").split("/") if p]
+    if len(parts) >= 2:
+        return parts[1]
+    return None
 
 
 def generate_client_and_app_id():
